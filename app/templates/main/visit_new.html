@@ -44,6 +44,7 @@
     </div>
 
     <form method="post" class="stack" id="visitForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <!-- 차량번호 -->
       <div class="field">
         <label>차량번호</label>

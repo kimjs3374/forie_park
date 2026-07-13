@@ -26,10 +26,12 @@
     {% if status == 'pending' %}
     <div class="row2" style="margin-top:14px;">
       <form method="post" action="{{ url_for('admin.approve_user', user_id=u.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem;">승인</button>
       </form>
       <form method="post" action="{{ url_for('admin.reject_user', user_id=u.id) }}"
             onsubmit="return confirm('반려하시겠습니까?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn-k btn-danger-o">반려</button>
       </form>
     </div>

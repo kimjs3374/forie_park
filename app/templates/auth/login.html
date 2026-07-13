@@ -9,6 +9,7 @@
         <p class="sub">아이디와 비밀번호를 입력하세요.</p>
       </div>
       <form method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="field">
           <label>아이디</label>
           <input type="text" name="username" value="{{ username or '' }}" required autofocus inputmode="latin">

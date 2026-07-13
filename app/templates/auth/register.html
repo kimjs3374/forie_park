@@ -8,6 +8,7 @@
       <p class="sub">가입 후 <b>관리사무소 승인</b>이 완료되면 로그인할 수 있습니다.</p>
     </div>
     <form method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label>아이디</label>
         <input type="text" name="username" value="{{ form.username or '' }}" placeholder="영문/숫자 4자 이상" required>

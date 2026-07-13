@@ -22,6 +22,10 @@ class Config:
     # 세대별 월 무료 주차시간 (분) — 200시간 = 12000분. 차감 로직은 추후 구현.
     DEFAULT_MONTHLY_FREE_MINUTES = int(os.environ.get("DEFAULT_MONTHLY_FREE_MINUTES", 12000))
 
+    # 관리사무소 알림용 텔레그램 (신규 가입 신청 등)
+    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
     # 세션 쿠키 보안 (Cloudflare 뒤 HTTPS 전용)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")

@@ -20,6 +20,7 @@
     <a class="btn-k btn-primary btn-lg" href="{{ url_for('auth.login') }}">로그인하러 가기</a>
     {% else %}
     <form method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="row2">
         <div class="field">
           <label>동</label>

@@ -29,6 +29,7 @@
     {% if r.status == 'active' %}
     <form method="post" action="{{ url_for('main.visit_cancel', reg_id=r.id) }}"
           onsubmit="return confirm('등록을 취소하시겠습니까?');" style="margin-top:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn-k btn-danger-o">등록 취소</button>
     </form>
     {% endif %}

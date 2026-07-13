@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 
 from . import models
+from .notify import send_signup_alert
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -58,6 +59,9 @@ def register():
             "role": "resident",
             "status": "pending",
         })
+
+        # 관리사무소에 신규 가입 알림 (실패해도 가입은 정상 처리)
+        send_signup_alert(name, dong, ho, phone, username)
 
         flash("가입 신청이 완료되었습니다. 관리사무소 승인 후 로그인할 수 있습니다.", "success")
         return redirect(url_for("auth.login"))

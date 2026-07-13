@@ -1,8 +1,11 @@
 from flask import Flask, redirect, request, url_for
 from flask_login import current_user
+from flask_wtf.csrf import CSRFProtect
 
 from config import Config
 from .extensions import login_manager
+
+csrf = CSRFProtect()
 
 
 def create_app(config_class=Config):
@@ -11,6 +14,7 @@ def create_app(config_class=Config):
 
     # 확장 초기화 (DB는 Supabase REST 사용 → SQLAlchemy 없음)
     login_manager.init_app(app)
+    csrf.init_app(app)
 
     # 모델 등록 (user_loader 바인딩)
     from . import models  # noqa: F401
