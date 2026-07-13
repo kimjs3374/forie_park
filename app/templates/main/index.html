@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}홈{% endblock %}
+{% block content %}
+<div class="card-k" style="text-align:center; padding:36px 26px;">
+  <p class="sub" style="margin:0;">{{ current_user.household_label }}</p>
+  <h1 class="title" style="margin:6px 0 24px; font-size:1.5rem;">{{ current_user.name }}님, 환영합니다</h1>
+  <a href="{{ url_for('main.visit_new') }}" class="btn-k btn-primary btn-lg">＋ 방문차량 등록하기</a>
+</div>
+
+<div class="section-title">
+  <span>최근 등록 내역</span>
+  <a href="{{ url_for('main.visit_list') }}">전체보기 →</a>
+</div>
+
+<div class="stack">
+{% if registrations %}
+  {% for r in registrations %}
+  <div class="item">
+    <div>
+      <div class="plate">{{ r.car_number }}</div>
+      <div class="time">{{ r.entry_time.strftime('%m/%d %H:%M') }} ~ {{ r.exit_time.strftime('%m/%d %H:%M') }}</div>
+    </div>
+    {% if r.status == 'cancelled' %}
+      <span class="badge-k b-cancel">취소됨</span>
+    {% elif r.nexpa_sync_status == 'synced' %}
+      <span class="badge-k b-ok">연동완료</span>
+    {% else %}
+      <span class="badge-k b-wait">전송대기</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">등록된 방문차량이 없습니다.</div>
+{% endif %}
+</div>
+{% endblock %}

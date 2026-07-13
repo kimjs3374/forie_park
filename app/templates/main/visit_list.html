@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}내 방문차량 내역{% endblock %}
+{% block content %}
+<div class="section-title">
+  <span>내 방문차량 내역</span>
+  <a href="{{ url_for('main.visit_new') }}">＋ 등록</a>
+</div>
+
+<div class="stack">
+{% if registrations %}
+  {% for r in registrations %}
+  <div class="item" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div class="plate">{{ r.car_number }}</div>
+        <div class="time">
+          입차 {{ r.entry_time.strftime('%Y-%m-%d %H:%M') }}<br>
+          출차 {{ r.exit_time.strftime('%Y-%m-%d %H:%M') }}
+        </div>
+      </div>
+      {% if r.status == 'cancelled' %}
+        <span class="badge-k b-cancel">취소됨</span>
+      {% elif r.nexpa_sync_status == 'synced' %}
+        <span class="badge-k b-ok">연동완료</span>
+      {% else %}
+        <span class="badge-k b-wait">전송대기</span>
+      {% endif %}
+    </div>
+    {% if r.status == 'active' %}
+    <form method="post" action="{{ url_for('main.visit_cancel', reg_id=r.id) }}"
+          onsubmit="return confirm('등록을 취소하시겠습니까?');" style="margin-top:14px;">
+      <button class="btn-k btn-danger-o">등록 취소</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">등록된 방문차량이 없습니다.</div>
+{% endif %}
+</div>
+{% endblock %}

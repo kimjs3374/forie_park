@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+{% block title %}방문차량 등록{% endblock %}
+{% block content %}
+<style>
+  .seg{ display:grid; grid-auto-flow:column; gap:8px; }
+  .seg .opt, .preset .opt{
+    border:2px solid var(--line); background:#f8fafc; border-radius:14px;
+    padding:14px 0; text-align:center; font-weight:700; font-size:1.05rem; cursor:pointer;
+    color:#334155; transition:.12s; user-select:none;
+  }
+  .seg .opt.on, .preset .opt.on{
+    border-color:var(--primary); background:#eef2ff; color:var(--primary-d);
+    box-shadow:0 0 0 4px rgba(79,70,229,.10);
+  }
+  .preset{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  .stepper{ display:flex; align-items:center; gap:10px; }
+  .stepper button{
+    width:60px; height:60px; border:none; border-radius:14px; background:#f1f5f9;
+    font-size:1.8rem; font-weight:800; color:#334155; cursor:pointer; line-height:1;
+  }
+  .stepper button:active{ transform:scale(.95); }
+  .stepper .val{
+    flex:1; text-align:center; font-size:1.6rem; font-weight:800; letter-spacing:.02em;
+    background:#fff; border:2px solid var(--line); border-radius:14px; height:60px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .divider{ display:flex; align-items:center; gap:10px; color:var(--muted); font-weight:600; font-size:.9rem; }
+  .divider::before,.divider::after{ content:""; flex:1; height:1px; background:var(--line); }
+  .summary{
+    background:linear-gradient(135deg,#4f46e5,#6366f1); color:#fff; border-radius:18px;
+    padding:20px; text-align:center;
+  }
+  .summary.bad{ background:linear-gradient(135deg,#dc2626,#ef4444); }
+  .summary .lab{ font-size:.95rem; opacity:.85; }
+  .summary .big{ font-size:1.7rem; font-weight:800; margin-top:4px; letter-spacing:-.02em; }
+  .summary .dur{ font-size:.95rem; opacity:.9; margin-top:6px; }
+</style>
+
+<div class="card-k">
+  <div class="stack">
+    <div>
+      <h1 class="title">방문차량 등록</h1>
+      <p class="sub">{{ current_user.household_label }} 세대</p>
+    </div>
+
+    <form method="post" class="stack" id="visitForm">
+      <!-- 차량번호 -->
+      <div class="field">
+        <label>차량번호</label>
+        <input type="text" name="car_number" id="carInput" value="{{ form.car_number or '' }}"
+               placeholder="12가3456" maxlength="9" autocomplete="off"
+               style="text-align:center; font-size:1.7rem; letter-spacing:.06em;" required autofocus>
+        <div id="carHint" style="margin-top:8px; font-size:.9rem; font-weight:600; color:var(--muted); text-align:center;">
+          예) 12가3456 · 123가4567 · 서울12가3456
+        </div>
+      </div>
+
+      <!-- 입차 -->
+      <div class="field">
+        <label>입차 날짜</label>
+        <div class="seg" id="inDaySeg">
+          <div class="opt on" data-day="0">오늘</div>
+          <div class="opt" data-day="1">내일</div>
+          <div class="opt" data-day="2">모레</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>입차 시각 <span style="color:var(--muted); font-weight:600;">(30분 단위)</span></label>
+        <div class="stepper">
+          <button type="button" data-t="in" data-d="-1">−</button>
+          <div class="val" id="inTimeVal">--:--</div>
+          <button type="button" data-t="in" data-d="1">＋</button>
+        </div>
+      </div>
+
+      <!-- 체류 빠른선택 -->
+      <div class="field">
+        <label>체류시간 빠른선택</label>
+        <div class="preset" id="durPreset">
+          <div class="opt" data-min="60">1시간</div>
+          <div class="opt on" data-min="120">2시간</div>
+          <div class="opt" data-min="180">3시간</div>
+          <div class="opt" data-min="240">4시간</div>
+          <div class="opt" data-min="360">6시간</div>
+          <div class="opt" data-min="720">12시간</div>
+          <div class="opt" data-min="1440">24시간</div>
+          <div class="opt" data-min="2880">2일</div>
+        </div>
+      </div>
+
+      <div class="divider">또는 출차시간 직접 지정</div>
+
+      <!-- 출차 -->
+      <div class="field">
+        <label>출차 날짜</label>
+        <div class="seg" id="outDaySeg">
+          <div class="opt" data-plus="0">입차당일</div>
+          <div class="opt" data-plus="1">+1일</div>
+          <div class="opt" data-plus="2">+2일</div>
+          <div class="opt" data-plus="3">+3일</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>출차 시각 <span style="color:var(--muted); font-weight:600;">(30분 단위)</span></label>
+        <div class="stepper">
+          <button type="button" data-t="out" data-d="-1">−</button>
+          <div class="val" id="outTimeVal">--:--</div>
+          <button type="button" data-t="out" data-d="1">＋</button>
+        </div>
+      </div>
+
+      <!-- 요약 -->
+      <div class="summary" id="summary">
+        <div class="lab" id="sumLab">방문 일정</div>
+        <div class="big" id="sumBig">--</div>
+        <div class="dur" id="sumDur">--</div>
+      </div>
+
+      <input type="hidden" name="entry_time" id="entry_time">
+      <input type="hidden" name="exit_time" id="exit_time">
+
+      <button class="btn-k btn-primary btn-lg" id="submitBtn">등록하기</button>
+      <a href="{{ url_for('main.index') }}" class="btn-k btn-ghost">취소</a>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const pad = n => String(n).padStart(2,'0');
+  const WD = ['일','월','화','수','목','금','토'];
+  const DAY = 86400000;
+
+  let inDay = 0;     // 입차 날짜 (오늘기준 0/1/2)
+  let inMin = 0;     // 입차 시각(분)
+  let outPlus = 0;   // 출차 날짜 (입차일 기준 +0..3)
+  let outMin = 0;    // 출차 시각(분)
+
+  // 입차 초기값: 현재시각 30분 올림 / 출차: +2시간
+  (function init(){
+    const now = new Date();
+    let m = Math.ceil((now.getHours()*60 + now.getMinutes())/30)*30;
+    if (m >= 1440){ m -= 1440; inDay = 1; }
+    inMin = m;
+    applyDur(120); // 기본 체류 2시간
+  })();
+
+  function midnightToday(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+  function entryDate(){ return new Date(midnightToday().getTime() + inDay*DAY + inMin*60000); }
+  function exitDate(){  return new Date(midnightToday().getTime() + (inDay+outPlus)*DAY + outMin*60000); }
+
+  // 체류분 -> 출차(outPlus,outMin) 역산
+  function applyDur(durMin){
+    const o = new Date(entryDate().getTime() + durMin*60000);
+    const eMid = new Date(midnightToday().getTime() + inDay*DAY);
+    const oMid = new Date(o); oMid.setHours(0,0,0,0);
+    outPlus = Math.round((oMid - eMid)/DAY);
+    outMin = o.getHours()*60 + o.getMinutes();
+  }
+
+  function fmtLocal(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  function fmtNice(d){ return `${pad(d.getMonth()+1)}/${pad(d.getDate())}(${WD[d.getDay()]}) ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+
+  function syncChips(){
+    document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.classList.toggle('on', +o.dataset.day===inDay));
+    document.querySelectorAll('#outDaySeg .opt').forEach(o=>o.classList.toggle('on', +o.dataset.plus===outPlus));
+    document.getElementById('inTimeVal').textContent = pad(Math.floor(inMin/60))+':'+pad(inMin%60);
+    document.getElementById('outTimeVal').textContent = pad(Math.floor(outMin/60))+':'+pad(outMin%60);
+  }
+
+  function highlightPreset(){
+    const dur = (exitDate()-entryDate())/60000;
+    document.querySelectorAll('#durPreset .opt').forEach(o=>o.classList.toggle('on', +o.dataset.min===dur));
+  }
+
+  // 차량번호 4가지 양식: (지역2)? + 숫자2~3 + 한글1 + 숫자4
+  const CAR_RE = /^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+  function carOk(){
+    return CAR_RE.test((document.getElementById('carInput').value || '').replace(/\s/g,''));
+  }
+  function renderCarHint(){
+    const v = (document.getElementById('carInput').value || '').replace(/\s/g,'');
+    const hint = document.getElementById('carHint');
+    if (!v){ hint.style.color='var(--muted)'; hint.textContent='예) 12가3456 · 123가4567 · 서울12가3456'; }
+    else if (carOk()){ hint.style.color='var(--ok)'; hint.textContent='✓ 올바른 차량번호'; }
+    else { hint.style.color='var(--danger)'; hint.textContent='형식 확인: 12가3456 / 123가4567 / 서울12가3456'; }
+  }
+
+  function render(){
+    syncChips();
+    const eIn = entryDate(), eOut = exitDate();
+    const dur = (eOut - eIn)/60000;
+    const sum = document.getElementById('summary');
+    const btn = document.getElementById('submitBtn');
+
+    document.getElementById('entry_time').value = fmtLocal(eIn);
+    document.getElementById('exit_time').value  = fmtLocal(eOut);
+
+    const MAX_MIN = 72*60;  // 1회 최대 72시간
+    let timeOk = true;
+    if (dur <= 0){
+      sum.classList.add('bad'); timeOk = false;
+      document.getElementById('sumLab').textContent = '출차시간 오류';
+      document.getElementById('sumBig').textContent = '출차가 입차보다 빨라요';
+      document.getElementById('sumBig').style.fontSize = '1.3rem';
+      document.getElementById('sumDur').textContent = '시간을 다시 확인하세요';
+    } else if (dur > MAX_MIN){
+      sum.classList.add('bad'); timeOk = false;
+      document.getElementById('sumLab').textContent = '체류시간 초과';
+      document.getElementById('sumBig').textContent = '최대 72시간까지 등록 가능';
+      document.getElementById('sumBig').style.fontSize = '1.3rem';
+      document.getElementById('sumDur').textContent = '출차시간을 줄여주세요';
+    } else {
+      sum.classList.remove('bad');
+      const h = Math.floor(dur/60), m = dur%60;
+      document.getElementById('sumLab').textContent = '방문 일정';
+      document.getElementById('sumBig').textContent = `${fmtNice(eIn)}  →  ${fmtNice(eOut)}`;
+      document.getElementById('sumBig').style.fontSize = '1.15rem';
+      document.getElementById('sumDur').textContent = `총 체류 ${h?h+'시간':''} ${m?m+'분':''}`.trim();
+    }
+
+    renderCarHint();
+    const ok = timeOk && carOk();
+    btn.disabled = !ok; btn.style.opacity = ok ? 1 : .5;
+    highlightPreset();
+  }
+
+  document.getElementById('carInput').addEventListener('input', render);
+
+  // 입차 날짜
+  document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{
+    const keepDur = (exitDate()-entryDate())/60000;  // 입차 바꿔도 체류 유지
+    inDay = +o.dataset.day; applyDur(keepDur); render();
+  }));
+  // 출차 날짜(직접) -> 프리셋 해제 효과는 highlight가 자동 처리
+  document.querySelectorAll('#outDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{
+    outPlus = +o.dataset.plus; render();
+  }));
+  // 체류 프리셋
+  document.querySelectorAll('#durPreset .opt').forEach(o=>o.addEventListener('click',()=>{
+    applyDur(+o.dataset.min); render();
+  }));
+  // 스테퍼
+  document.querySelectorAll('.stepper button').forEach(b=>b.addEventListener('click',()=>{
+    const step = (+b.dataset.d)*30;
+    if (b.dataset.t==='in'){
+      const keepDur = (exitDate()-entryDate())/60000;
+      inMin += step; if(inMin>=1440){inMin-=1440;inDay++;} if(inMin<0){inMin+=1440;inDay=Math.max(0,inDay-1);}
+      applyDur(keepDur);
+    } else {
+      outMin += step; if(outMin>=1440){outMin-=1440;outPlus++;} if(outMin<0){outMin+=1440;outPlus=Math.max(0,outPlus-1);}
+    }
+    render();
+  }));
+
+  render();
+})();
+</script>
+{% endblock %}

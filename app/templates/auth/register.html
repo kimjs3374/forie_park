@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}입주민 가입 신청{% endblock %}
+{% block content %}
+<div class="card-k">
+  <div class="stack">
+    <div>
+      <h1 class="title">입주민 가입 신청</h1>
+      <p class="sub">가입 후 <b>관리사무소 승인</b>이 완료되면 로그인할 수 있습니다.</p>
+    </div>
+    <form method="post" class="stack">
+      <div class="field">
+        <label>아이디</label>
+        <input type="text" name="username" value="{{ form.username or '' }}" placeholder="영문/숫자 4자 이상" required>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>비밀번호</label>
+          <input type="password" name="password" placeholder="8자 이상" required>
+        </div>
+        <div class="field">
+          <label>비밀번호 확인</label>
+          <input type="password" name="password2" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>이름</label>
+        <input type="text" name="name" value="{{ form.name or '' }}" required>
+      </div>
+      <div class="field">
+        <label>휴대전화</label>
+        <input type="tel" name="phone" value="{{ form.phone or '' }}" placeholder="010-0000-0000" inputmode="numeric">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>동</label>
+          <input type="text" name="dong" value="{{ form.dong or '' }}" placeholder="101" inputmode="numeric" required>
+        </div>
+        <div class="field">
+          <label>호</label>
+          <input type="text" name="ho" value="{{ form.ho or '' }}" placeholder="1502" inputmode="numeric" required>
+        </div>
+      </div>
+      <button class="btn-k btn-primary btn-lg">가입 신청</button>
+    </form>
+    <div class="muted-link">
+      <a href="{{ url_for('auth.login') }}">← 로그인으로 돌아가기</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

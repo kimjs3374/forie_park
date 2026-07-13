@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}관리 - 방문등록 내역{% endblock %}
+{% block content %}
+<div class="section-title"><span>전체 방문차량 등록 내역</span></div>
+
+<div class="card-k" style="padding:18px; margin-bottom:16px;">
+  <form method="get" action="{{ url_for('admin.visits') }}" class="stack" style="gap:12px;">
+    <div class="row2">
+      <div class="field">
+        <label style="font-size:.9rem;">시작일(입차)</label>
+        <input type="date" name="from" value="{{ date_from }}" style="height:52px; font-size:1.05rem;">
+      </div>
+      <div class="field">
+        <label style="font-size:.9rem;">종료일(입차)</label>
+        <input type="date" name="to" value="{{ date_to }}" style="height:52px; font-size:1.05rem;">
+      </div>
+    </div>
+    <div class="row2">
+      <button class="btn-k btn-ghost" style="min-height:52px; font-size:1.05rem;">조회</button>
+      <a class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem; text-decoration:none;"
+         href="{{ url_for('admin.export_visits', **{'from': date_from, 'to': date_to}) }}">⬇ CSV 다운로드</a>
+    </div>
+  </form>
+</div>
+
+<div class="stack">
+{% if registrations %}
+  {% for r in registrations %}
+  <div class="item">
+    <div>
+      <div class="plate" style="font-size:1.2rem;">{{ r.car_number }}
+        <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ r.dong }}동 {{ r.ho }}호</span></div>
+      <div class="time">{{ r.entry_time.strftime('%m/%d %H:%M') }} ~ {{ r.exit_time.strftime('%m/%d %H:%M') }}</div>
+    </div>
+    {% if r.status == 'cancelled' %}
+      <span class="badge-k b-cancel">취소</span>
+    {% elif r.nexpa_sync_status == 'synced' %}
+      <span class="badge-k b-ok">연동완료</span>
+    {% else %}
+      <span class="badge-k b-wait">전송대기</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">등록 내역이 없습니다.</div>
+{% endif %}
+</div>
+{% endblock %}

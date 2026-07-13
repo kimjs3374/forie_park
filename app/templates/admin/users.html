@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}관리 - 가입 승인{% endblock %}
+{% block content %}
+<div class="section-title"><span>가입 승인 관리</span></div>
+
+<div class="row2" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:16px; gap:8px;">
+  {% set tabs = [('pending','대기'),('approved','승인'),('rejected','반려')] %}
+  {% for key, label in tabs %}
+  <a href="{{ url_for('admin.users', status=key) }}" class="btn-k {{ 'btn-primary' if status==key else 'btn-ghost' }}"
+     style="min-height:48px; font-size:1rem; text-decoration:none;">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<div class="stack">
+{% if users %}
+  {% for u in users %}
+  <div class="item" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div style="font-weight:800; font-size:1.1rem;">{{ u.name }}
+          <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ u.household_label }}</span></div>
+        <div class="time">{{ u.username }}{% if u.phone %} · {{ u.phone }}{% endif %}</div>
+        <div class="time">신청 {{ u.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+      </div>
+    </div>
+    {% if status == 'pending' %}
+    <div class="row2" style="margin-top:14px;">
+      <form method="post" action="{{ url_for('admin.approve_user', user_id=u.id) }}">
+        <button class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem;">승인</button>
+      </form>
+      <form method="post" action="{{ url_for('admin.reject_user', user_id=u.id) }}"
+            onsubmit="return confirm('반려하시겠습니까?');">
+        <button class="btn-k btn-danger-o">반려</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">해당하는 사용자가 없습니다.</div>
+{% endif %}
+</div>
+{% endblock %}
