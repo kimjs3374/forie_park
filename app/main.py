@@ -136,9 +136,11 @@ def visit_cancel(reg_id):
 
     if reg.status == "cancelled":
         flash("이미 취소된 등록입니다.", "info")
+    elif reg.visit_state:
+        flash("이미 입차한 차량은 취소할 수 없습니다.", "danger")
     else:
         models.visits_update(reg_id, {"status": "cancelled"})
-        cancel_on_nexpa(reg)  # nexpa 취소 연동(현재 stub)
+        cancel_on_nexpa(reg)  # nexpa 취소 연동
         flash("등록이 취소되었습니다.", "info")
 
     return redirect(url_for("main.visit_list"))

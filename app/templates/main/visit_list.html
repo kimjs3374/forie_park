@@ -21,6 +21,9 @@
   <h1 class="title" style="margin:6px 0 24px; font-size:1.5rem;">{{ current_user.name }}님, 환영합니다</h1>
   <a href="{{ url_for('main.visit_new') }}" class="btn-k btn-primary btn-lg">＋ 방문차량 등록하기</a>
 </div>
+<div style="text-align:center; color:#ef4444; font-weight:800; font-size:1rem; margin:2px 4px 18px;">
+  ※ 입차 후에는 등록을 취소할 수 없습니다
+</div>
 
 <div class="section-title">
   <span>내 방문차량 내역</span>
@@ -55,12 +58,16 @@
         <span class="badge-k b-wait">등록중</span>
       {% endif %}
     </div>
-    {% if r.status == 'active' %}
+    {% if r.status == 'active' and not r.visit_state %}
     <form method="post" action="{{ url_for('main.visit_cancel', reg_id=r.id) }}"
           onsubmit="return confirm('등록을 취소하시겠습니까?');" style="margin-top:14px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn-k btn-danger-o">등록 취소</button>
     </form>
+    {% elif r.status == 'active' and r.visit_state %}
+    <div style="margin-top:14px; text-align:center; color:var(--muted); font-size:.9rem; font-weight:600;">
+      입차 후에는 취소할 수 없습니다
+    </div>
     {% endif %}
   </div>
   {% endfor %}
