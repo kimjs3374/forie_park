@@ -241,6 +241,10 @@ class VisitRegistration:
         return self._row.get("visit_state")  # None | entered | exited
 
     @property
+    def nexpa_registered(self):
+        return bool(self._row.get("nexpa_registered"))
+
+    @property
     def user_name(self):
         """PostgREST 임베드(parking_users(name))로 함께 조회된 신청자 이름."""
         u = self._row.get(T_USERS)

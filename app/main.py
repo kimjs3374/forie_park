@@ -87,14 +87,13 @@ def visit_new():
                 flash(e, "danger")
             return render_template("main/visit_new.html", form=request.form)
 
-        # 중복(연장) 방지: 같은 차량번호 활성 등록과 방문기간이 겹치면 차단
+        # 중복 방지: 같은 차량번호에 아직 끝나지 않은 활성 등록이 있으면 차단 (차량당 1건, 연장 방지)
+        now_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).replace(tzinfo=None)
         for ex in models.visits_active_by_car(car_number):
-            ex_in = ex.entry_time.replace(tzinfo=None) if ex.entry_time else None
             ex_out = ex.exit_time.replace(tzinfo=None) if ex.exit_time else None
-            if ex_in and ex_out and entry_time <= ex_out and exit_time >= ex_in:
-                can_from = (ex_out + timedelta(days=1)).strftime("%Y-%m-%d")
+            if ex_out and ex_out >= now_kst:
                 block_msg = (f"이 차량({car_number})은 이미 {ex_out.strftime('%Y-%m-%d')}까지 "
-                             f"등록되어 있습니다. {can_from}부터 다시 등록할 수 있습니다.")
+                             f"등록되어 있습니다. 기존 등록이 끝나거나 취소된 뒤에 다시 등록할 수 있습니다.")
                 return render_template("main/visit_new.html", form=request.form, block_msg=block_msg)
 
         reg = models.visits_create({
@@ -113,9 +112,15 @@ def visit_new():
 
         # nexpa 연동(현재 stub) — 규격 확정 전까지는 전송대기 상태로 보관
         send_to_nexpa(reg)
+        try:
+            from .notify import send_visit_alert
+            send_visit_alert(current_user.name, current_user.dong, current_user.ho,
+                             car_number, visitor_phone, visit_reason,
+                             entry_time.strftime("%Y-%m-%d"), exit_time.strftime("%Y-%m-%d"))
+        except Exception:
+            pass
 
-        flash("방문차량이 등록되었습니다.", "success")
-        return redirect(url_for("main.visit_list"))
+        return redirect(url_for("main.visit_list", registered=1))
 
     return render_template("main/visit_new.html", form={})
 

@@ -3,29 +3,28 @@
 {% block content %}
 <style>
   .seg{ display:grid; grid-auto-flow:column; gap:8px; }
-  .seg .opt, .preset .opt{
+  .seg .opt{
     border:2px solid var(--line); background:#f8fafc; border-radius:14px;
     padding:14px 0; text-align:center; font-weight:700; font-size:1.05rem; cursor:pointer;
     color:#334155; transition:.12s; user-select:none;
   }
-  .seg .opt.on, .preset .opt.on{
+  .seg .opt.on{
     border-color:var(--primary); background:#eef2ff; color:var(--primary-d);
     box-shadow:0 0 0 4px rgba(79,70,229,.10);
   }
-  .preset{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-  .stepper{ display:flex; align-items:center; gap:10px; }
-  .stepper button{ width:60px; height:60px; border:none; border-radius:14px; background:#f1f5f9;
-    font-size:1.8rem; font-weight:800; color:#334155; cursor:pointer; line-height:1; }
-  .stepper .val{ flex:1; text-align:center; font-size:1.6rem; font-weight:800;
-    background:#fff; border:2px solid var(--line); border-radius:14px; height:60px;
-    display:flex; align-items:center; justify-content:center; }
-  .summary{ background:linear-gradient(135deg,#0d9488,#14b8a6); color:#fff; border-radius:18px;
-    padding:20px; text-align:center; }
+  .datesel{
+    width:100%; height:60px; font-size:1.15rem; font-weight:700; color:var(--ink);
+    border:2px solid var(--line); border-radius:14px; padding:0 34px 0 14px; background:#f8fafc;
+    appearance:none; -webkit-appearance:none; cursor:pointer; outline:none;
+    background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 12px center;
+  }
+  .datesel:focus{ border-color:var(--primary); background-color:#fff; box-shadow:0 0 0 4px rgba(79,70,229,.12); }
+  .summary{ background:linear-gradient(135deg,#0d9488,#14b8a6); color:#fff; border-radius:18px; padding:20px; text-align:center; }
   .summary.bad{ background:linear-gradient(135deg,#dc2626,#ef4444); }
   .summary .lab{ font-size:.95rem; opacity:.85; }
   .summary .big{ font-size:1.7rem; font-weight:800; margin-top:4px; letter-spacing:-.02em; }
   .summary .dur{ font-size:.95rem; opacity:.9; margin-top:6px; }
-  /* 팝업 */
   .modal-back{ position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:100;
     display:flex; align-items:center; justify-content:center; padding:24px; }
   .modal-card{ background:#fff; border-radius:20px; padding:28px 24px; max-width:400px; width:100%;
@@ -87,7 +86,7 @@
         </datalist>
       </div>
 
-      <!-- 입차 날짜 (빠른선택 칩 + 직접 날짜입력) -->
+      <!-- 입차 날짜: 오늘/내일/모레 + 년/월/일 드롭다운 -->
       <div class="field">
         <label>입차 날짜</label>
         <div class="seg" id="inDaySeg" style="margin-bottom:10px;">
@@ -95,7 +94,11 @@
           <div class="opt" data-day="1">내일</div>
           <div class="opt" data-day="2">모레</div>
         </div>
-        <input type="date" id="inDateInput" style="text-align:center; font-size:1.2rem;">
+        <div style="display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:8px;">
+          <select id="yearSel" class="datesel"></select>
+          <select id="monthSel" class="datesel"></select>
+          <select id="daySel" class="datesel"></select>
+        </div>
       </div>
 
       <!-- 방문기간 (최대 3일, 하루 종일) -->
@@ -108,43 +111,7 @@
         </div>
       </div>
 
-      <!--
-        ────────────────────────────────────────────────────────────
-        [시간단위 등록 UI — 추후 재사용 위해 주석 보관]
-        아래 3블록(입차 시각 스테퍼 / 체류시간 빠른선택 / 출차 시각 스테퍼)을
-        다시 쓰려면 주석 해제 후, 하단 스크립트를 시간단위 버전으로 교체.
-
-        <div class="field">
-          <label>입차 시각 <span>(30분 단위)</span></label>
-          <div class="stepper">
-            <button type="button" data-t="in" data-d="-1">−</button>
-            <div class="val" id="inTimeVal">--:--</div>
-            <button type="button" data-t="in" data-d="1">＋</button>
-          </div>
-        </div>
-        <div class="field">
-          <label>체류시간 빠른선택</label>
-          <div class="preset" id="durPreset">
-            <div class="opt" data-min="60">1시간</div>
-            <div class="opt" data-min="120">2시간</div>
-            <div class="opt" data-min="180">3시간</div>
-            <div class="opt" data-min="240">4시간</div>
-            <div class="opt" data-min="360">6시간</div>
-            <div class="opt" data-min="720">12시간</div>
-            <div class="opt" data-min="1440">24시간</div>
-            <div class="opt" data-min="2880">2일</div>
-          </div>
-        </div>
-        <div class="field">
-          <label>출차 시각 <span>(30분 단위)</span></label>
-          <div class="stepper">
-            <button type="button" data-t="out" data-d="-1">−</button>
-            <div class="val" id="outTimeVal">--:--</div>
-            <button type="button" data-t="out" data-d="1">＋</button>
-          </div>
-        </div>
-        ────────────────────────────────────────────────────────────
-      -->
+      <!-- [시간단위 등록 UI — 추후 재사용 위해 주석 보관] -->
 
       <!-- 요약 -->
       <div class="summary" id="summary">
@@ -164,24 +131,38 @@
 
 <script>
 (function(){
-  const pad = n => String(n).padStart(2,'0');
-  const WD = ['일','월','화','수','목','금','토'];
-  const DAY = 86400000;
-  let outPlus = 0;  // 방문기간 (입차일 기준 +0..2 → 최대 3일)
-  const inDateInput = document.getElementById('inDateInput');
+  const pad=n=>String(n).padStart(2,'0');
+  const WD=['일','월','화','수','목','금','토'];
+  const DAY=86400000;
+  let outPlus=0;
+  const yearSel=document.getElementById('yearSel');
+  const monthSel=document.getElementById('monthSel');
+  const daySel=document.getElementById('daySel');
 
   function todayMidnight(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
-  function toDateStr(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
-  function entryDate(){
-    const v=inDateInput.value; let d = v ? new Date(v+'T00:00:00') : todayMidnight();
-    if(isNaN(d.getTime())) d=todayMidnight();
-    d.setHours(0,0,0,0); return d;
-  }
-  function exitDate(){ const d=new Date(entryDate().getTime()+outPlus*DAY); d.setHours(23,59,0,0); return d; }
-  function fmtLocal(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
   function fmtNice(d){ return `${pad(d.getMonth()+1)}/${pad(d.getDate())}(${WD[d.getDay()]})`; }
+  function fmtLocal(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  function addOpt(sel,val,txt){ const o=document.createElement('option'); o.value=val; o.textContent=txt; sel.appendChild(o); }
 
-  const CAR_RE = /^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+  (function initSel(){
+    const y=todayMidnight().getFullYear();
+    for(let yy=y; yy<=y+1; yy++) addOpt(yearSel,yy,yy+'년');
+    for(let mm=1; mm<=12; mm++) addOpt(monthSel,mm,mm+'월');
+    setDate(todayMidnight());
+  })();
+
+  function rebuildDays(){
+    const dim=new Date(+yearSel.value,+monthSel.value,0).getDate();
+    const cur=+daySel.value||1;
+    daySel.innerHTML='';
+    for(let dd=1; dd<=dim; dd++) addOpt(daySel,dd,dd+'일');
+    daySel.value=Math.min(cur,dim);
+  }
+  function setDate(d){ yearSel.value=d.getFullYear(); monthSel.value=d.getMonth()+1; rebuildDays(); daySel.value=d.getDate(); }
+  function entryDate(){ const d=new Date(+yearSel.value,+monthSel.value-1,+daySel.value); d.setHours(0,0,0,0); return d; }
+  function exitDate(){ const d=new Date(entryDate().getTime()+outPlus*DAY); d.setHours(23,59,0,0); return d; }
+
+  const CAR_RE=/^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
   function carOk(){ return CAR_RE.test((document.getElementById('carInput').value||'').replace(/\s/g,'')); }
   function renderCarHint(){
     const v=(document.getElementById('carInput').value||'').replace(/\s/g,'');
@@ -191,25 +172,23 @@
     else { hint.style.color='var(--danger)'; hint.textContent='형식 확인: 12가3456 / 123가4567 / 서울12가3456'; }
   }
   function syncChips(){
-    const diff = Math.round((entryDate()-todayMidnight())/DAY);
+    const diff=Math.round((entryDate()-todayMidnight())/DAY);
     document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.classList.toggle('on',+o.dataset.day===diff));
     document.querySelectorAll('#outDaySeg .opt').forEach(o=>o.classList.toggle('on',+o.dataset.plus===outPlus));
   }
   function render(){
     syncChips();
     const eIn=entryDate(), eOut=exitDate();
-    const past = eIn < todayMidnight();
+    const past=eIn<todayMidnight();
     document.getElementById('entry_time').value=fmtLocal(eIn);
     document.getElementById('exit_time').value=fmtLocal(eOut);
     const sum=document.getElementById('summary');
-    if(past){
-      sum.classList.add('bad');
+    if(past){ sum.classList.add('bad');
       document.getElementById('sumLab').textContent='날짜 오류';
       document.getElementById('sumBig').textContent='지난 날짜는 등록할 수 없습니다';
       document.getElementById('sumBig').style.fontSize='1.2rem';
       document.getElementById('sumDur').textContent='입차 날짜를 다시 선택하세요';
-    } else {
-      sum.classList.remove('bad');
+    } else { sum.classList.remove('bad');
       document.getElementById('sumLab').textContent='방문 일정';
       document.getElementById('sumBig').textContent=`${fmtNice(eIn)} ~ ${fmtNice(eOut)}`;
       document.getElementById('sumBig').style.fontSize='1.3rem';
@@ -221,17 +200,14 @@
     const ok=carOk()&&reasonOk&&phoneOk&&!past;
     const btn=document.getElementById('submitBtn'); btn.disabled=!ok; btn.style.opacity=ok?1:.5;
   }
-
-  // 초기값: 오늘, 과거 선택 불가
-  inDateInput.min = toDateStr(todayMidnight());
-  if(!inDateInput.value) inDateInput.value = toDateStr(todayMidnight());
-
   document.getElementById('carInput').addEventListener('input',render);
   document.getElementById('reasonInput').addEventListener('input',render);
   document.getElementById('phoneInput').addEventListener('input',render);
-  inDateInput.addEventListener('change',render);
+  yearSel.addEventListener('change',()=>{ rebuildDays(); render(); });
+  monthSel.addEventListener('change',()=>{ rebuildDays(); render(); });
+  daySel.addEventListener('change',render);
   document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{
-    inDateInput.value = toDateStr(new Date(todayMidnight().getTime()+(+o.dataset.day)*DAY)); render();
+    setDate(new Date(todayMidnight().getTime()+(+o.dataset.day)*DAY)); render();
   }));
   document.querySelectorAll('#outDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{ outPlus=+o.dataset.plus; render(); }));
   render();

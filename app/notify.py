@@ -34,3 +34,16 @@ def send_signup_alert(name, dong, ho, phone, username):
         "관리자 페이지에서 승인해주세요."
     )
     return _send(text)
+
+
+def send_visit_alert(name, dong, ho, car_number, phone, reason, book_start, book_end):
+    """방문차량 등록을 관리사무소에 알린다."""
+    text = (
+        "🚗 방문차량 등록\n\n"
+        f"· 신청자: {name} ({dong}동 {ho}호)\n"
+        f"· 차량번호: {car_number}\n"
+        f"· 방문자 연락처: {phone or '-'}\n"
+        f"· 방문사유: {reason or '-'}\n"
+        f"· 방문기간: {book_start} ~ {book_end}"
+    )
+    return _send(text)

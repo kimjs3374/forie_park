@@ -33,10 +33,10 @@
       <span class="badge-k b-cancel">출차완료</span>
     {% elif r.visit_state == 'entered' %}
       <span class="badge-k b-ok">주차중</span>
-    {% elif r.nexpa_sync_status == 'synced' %}
-      <span class="badge-k b-ok">연동완료</span>
+    {% elif r.nexpa_registered %}
+      <span class="badge-k b-ok">등록완료</span>
     {% else %}
-      <span class="badge-k b-wait">전송대기</span>
+      <span class="badge-k b-wait">등록중</span>
     {% endif %}
   </div>
   {% endfor %}

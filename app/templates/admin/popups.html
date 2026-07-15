@@ -1,23 +1,32 @@
 {% extends "base.html" %}
 {% block title %}관리 - 팝업 관리{% endblock %}
 {% block content %}
+<style>
+  .datesel{ width:100%; height:52px; font-size:1rem; font-weight:600; color:var(--ink);
+    border:2px solid var(--line); border-radius:12px; padding:0 30px 0 12px; background:#f8fafc;
+    appearance:none; -webkit-appearance:none; cursor:pointer; outline:none;
+    background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 10px center; }
+  .datesel:focus{ border-color:var(--primary); background-color:#fff; }
+  .dgrid{ display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:6px; }
+</style>
 <div class="section-title"><span>팝업(공지) 관리</span>
   <a href="{{ url_for('admin.dashboard') }}">← 대시보드</a></div>
 
 <div class="card-k" style="margin-bottom:18px;">
-  <form method="post" action="{{ url_for('admin.popup_new') }}" class="stack">
+  <form method="post" action="{{ url_for('admin.popup_new') }}" class="stack" id="popupForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="field"><label>제목</label>
       <input type="text" name="title" maxlength="200" required></div>
     <div class="field"><label>내용</label>
       <textarea name="content" required rows="4"
         style="width:100%; font-size:1.05rem; border:2px solid var(--line); border-radius:14px; padding:14px; background:#f8fafc;"></textarea></div>
-    <div class="row2">
-      <div class="field"><label>표시 시작일 <span style="color:var(--muted);font-weight:600;">(선택)</span></label>
-        <input type="date" name="start_date"></div>
-      <div class="field"><label>표시 종료일 <span style="color:var(--muted);font-weight:600;">(선택)</span></label>
-        <input type="date" name="end_date"></div>
-    </div>
+    <div class="field"><label>표시 시작일 <span style="color:var(--muted);font-weight:600;">(제한없음 = 즉시)</span></label>
+      <div class="dgrid"><select id="sYear" class="datesel"></select><select id="sMonth" class="datesel"></select><select id="sDay" class="datesel"></select></div>
+      <input type="hidden" name="start_date" id="startHidden"></div>
+    <div class="field"><label>표시 종료일 <span style="color:var(--muted);font-weight:600;">(제한없음 = 계속)</span></label>
+      <div class="dgrid"><select id="eYear" class="datesel"></select><select id="eMonth" class="datesel"></select><select id="eDay" class="datesel"></select></div>
+      <input type="hidden" name="end_date" id="endHidden"></div>
     <button class="btn-k btn-primary">팝업 등록</button>
   </form>
 </div>
@@ -50,4 +59,29 @@
   <div class="item" style="justify-content:center; color:var(--muted);">등록된 팝업이 없습니다.</div>
 {% endfor %}
 </div>
+
+<script>
+(function(){
+  const pad=n=>String(n).padStart(2,'0');
+  function addOpt(sel,val,txt){ const o=document.createElement('option'); o.value=val; o.textContent=txt; sel.appendChild(o); }
+  const now=new Date(); const Y=now.getFullYear();
+  function fillTriple(yId,mId,dId){
+    const y=document.getElementById(yId), m=document.getElementById(mId), d=document.getElementById(dId);
+    addOpt(y,'','제한없음'); for(let yy=Y; yy<=Y+2; yy++) addOpt(y,yy,yy+'년');
+    for(let mm=1; mm<=12; mm++) addOpt(m,mm,mm+'월');
+    for(let dd=1; dd<=31; dd++) addOpt(d,dd,dd+'일');
+    m.value=now.getMonth()+1; d.value=now.getDate();
+  }
+  fillTriple('sYear','sMonth','sDay'); fillTriple('eYear','eMonth','eDay');
+  function combine(yId,mId,dId,hId){
+    const y=document.getElementById(yId).value;
+    document.getElementById(hId).value = y ? (y+'-'+pad(document.getElementById(mId).value)+'-'+pad(document.getElementById(dId).value)) : '';
+  }
+  function bind(yId,mId,dId,hId){
+    ['change'].forEach(ev=>{ [yId,mId,dId].forEach(id=>document.getElementById(id).addEventListener(ev,()=>combine(yId,mId,dId,hId))); });
+    combine(yId,mId,dId,hId);
+  }
+  bind('sYear','sMonth','sDay','startHidden'); bind('eYear','eMonth','eDay','endHidden');
+})();
+</script>
 {% endblock %}

@@ -1,9 +1,29 @@
 {% extends "base.html" %}
 {% block title %}내 방문차량 내역{% endblock %}
 {% block content %}
+{% if request.args.get('registered') %}
+<div class="modal-back" id="regDoneModal" style="z-index:120;">
+  <div class="modal-card">
+    <div class="modal-title" style="color:var(--primary);">✅ 등록 요청 완료</div>
+    <div class="modal-body">방문차량 등록 요청이 접수되었습니다.
+잠시 후 목록에서 상태가 <b>등록완료</b>로 바뀌었는지 확인해 주세요.
+
+⚠️ 이용 안내
+· 방문차량 등록은 <b>입차만</b> 허용됩니다.
+· 오후 8시 이후 숙박(밤샘 주차)을 원하실 경우, 관리사무소 또는 경비실을 경유하여 <b>방문차량증</b>을 작성하시고 앞유리 대시보드 위 잘 보이는 곳에 비치해 주세요.
+· 방문차량증이 없는 경우 <b>주차단속 대상</b>이 됩니다.</div>
+    <button class="btn-k btn-primary" onclick="document.getElementById('regDoneModal').remove()">확인</button>
+  </div>
+</div>
+{% endif %}
+<div class="card-k" style="text-align:center; padding:36px 26px;">
+  <p class="sub" style="margin:0;">{{ current_user.household_label }}</p>
+  <h1 class="title" style="margin:6px 0 24px; font-size:1.5rem;">{{ current_user.name }}님, 환영합니다</h1>
+  <a href="{{ url_for('main.visit_new') }}" class="btn-k btn-primary btn-lg">＋ 방문차량 등록하기</a>
+</div>
+
 <div class="section-title">
   <span>내 방문차량 내역</span>
-  <a href="{{ url_for('main.visit_new') }}">＋ 등록</a>
 </div>
 
 <div class="stack">
@@ -29,10 +49,10 @@
         <span class="badge-k b-cancel">출차완료</span>
       {% elif r.visit_state == 'entered' %}
         <span class="badge-k b-ok">주차중</span>
-      {% elif r.nexpa_sync_status == 'synced' %}
-        <span class="badge-k b-ok">연동완료</span>
+      {% elif r.nexpa_registered %}
+        <span class="badge-k b-ok">등록완료</span>
       {% else %}
-        <span class="badge-k b-wait">전송대기</span>
+        <span class="badge-k b-wait">등록중</span>
       {% endif %}
     </div>
     {% if r.status == 'active' %}

@@ -18,6 +18,7 @@
       --radius:22px;
     }
     *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    input, select, textarea, button{ font-family:inherit; }
     html,body{ margin:0; height:100%; }
     body{
       font-family:'Pretendard',system-ui,sans-serif;
@@ -117,7 +118,7 @@
 <body>
   <div class="kiosk">
     <div class="topbar">
-      <span class="brand">🚗 방문차량 등록</span>
+      <a class="brand" href="{{ url_for('main.index') }}" style="color:#fff; text-decoration:none;">🚗 방문차량 등록</a>
       {% if current_user.is_authenticated %}
       <span>
         {% if current_user.is_admin %}<a class="chip" href="{{ url_for('admin.dashboard') }}">관리</a>{% endif %}
