@@ -9,3 +9,8 @@ instance/
 migrations/versions/*.pyc
 .playwright-mcp/
 .bkit/
+
+# 배포 백업
+*.bak
+*.bak[0-9]
+*.bak[A-Z]

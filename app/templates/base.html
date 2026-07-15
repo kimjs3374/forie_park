@@ -106,6 +106,12 @@
     .section-title{ color:#fff; font-weight:800; font-size:1.1rem; margin:6px 4px 14px;
                     display:flex; justify-content:space-between; align-items:center; }
     .section-title a{ color:#cbd5e1; font-weight:600; font-size:.9rem; text-decoration:none; }
+    .modal-back{ position:fixed; inset:0; background:rgba(15,23,42,.6); z-index:100;
+      display:flex; align-items:center; justify-content:center; padding:24px; }
+    .modal-card{ background:#fff; border-radius:20px; padding:28px 24px; max-width:420px; width:100%;
+      box-shadow:0 30px 60px -20px rgba(0,0,0,.6); max-height:80vh; overflow-y:auto; }
+    .modal-title{ font-size:1.3rem; font-weight:800; margin-bottom:12px; }
+    .modal-body{ color:var(--ink); font-size:1.05rem; line-height:1.6; margin-bottom:20px; white-space:pre-wrap; }
   </style>
 </head>
 <body>
@@ -128,5 +134,27 @@
 
     {% block content %}{% endblock %}
   </div>
+  <script>
+  (function(){
+    function fmt(iso){ if(!iso) return '-'; var d=new Date(iso);
+      return d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}); }
+    function durText(ms){ if(ms<0) ms=0; var m=Math.floor(ms/60000);
+      if(m<60) return m+'분'; return Math.floor(m/60)+'시간 '+(m%60)+'분'; }
+    function tick(){
+      document.querySelectorAll('[data-inout]').forEach(function(el){
+        var inv=el.getAttribute('data-in'), outv=el.getAttribute('data-out');
+        var vin=el.querySelector('.v-in'), vout=el.querySelector('.v-out'), vd=el.querySelector('.v-dur');
+        if(vin) vin.textContent = inv? fmt(inv) : '-';
+        if(vout) vout.textContent = outv? fmt(outv) : '-';
+        if(vd){
+          if(!inv){ vd.textContent='-'; }
+          else { var end = outv? new Date(outv) : new Date();
+                 vd.textContent = durText(end - new Date(inv)) + (outv? '' : ' (주차중)'); }
+        }
+      });
+    }
+    tick(); setInterval(tick, 30000);
+  })();
+  </script>
 </body>
 </html>

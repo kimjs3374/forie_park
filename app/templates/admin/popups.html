@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}관리 - 팝업 관리{% endblock %}
+{% block content %}
+<div class="section-title"><span>팝업(공지) 관리</span>
+  <a href="{{ url_for('admin.dashboard') }}">← 대시보드</a></div>
+
+<div class="card-k" style="margin-bottom:18px;">
+  <form method="post" action="{{ url_for('admin.popup_new') }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="field"><label>제목</label>
+      <input type="text" name="title" maxlength="200" required></div>
+    <div class="field"><label>내용</label>
+      <textarea name="content" required rows="4"
+        style="width:100%; font-size:1.05rem; border:2px solid var(--line); border-radius:14px; padding:14px; background:#f8fafc;"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>표시 시작일 <span style="color:var(--muted);font-weight:600;">(선택)</span></label>
+        <input type="date" name="start_date"></div>
+      <div class="field"><label>표시 종료일 <span style="color:var(--muted);font-weight:600;">(선택)</span></label>
+        <input type="date" name="end_date"></div>
+    </div>
+    <button class="btn-k btn-primary">팝업 등록</button>
+  </form>
+</div>
+
+<div class="stack">
+{% for p in popups %}
+  <div class="item" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div style="min-width:0;">
+        <div style="font-weight:800; font-size:1.1rem;">{{ p.title }}</div>
+        <div class="time" style="white-space:pre-wrap;">{{ p.content }}</div>
+        <div class="time">표시기간: {{ p.start_date or '제한없음' }} ~ {{ p.end_date or '제한없음' }}</div>
+      </div>
+      {% if p.is_active %}<span class="badge-k b-ok">표시중</span>
+      {% else %}<span class="badge-k b-cancel">숨김</span>{% endif %}
+    </div>
+    <div class="row2" style="margin-top:14px;">
+      <form method="post" action="{{ url_for('admin.popup_toggle', pid=p.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn-k btn-ghost" style="min-height:48px; font-size:1rem;">{{ '숨기기' if p.is_active else '표시하기' }}</button>
+      </form>
+      <form method="post" action="{{ url_for('admin.popup_delete', pid=p.id) }}"
+            onsubmit="return confirm('삭제하시겠습니까?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn-k btn-danger-o">삭제</button>
+      </form>
+    </div>
+  </div>
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">등록된 팝업이 없습니다.</div>
+{% endfor %}
+</div>
+{% endblock %}

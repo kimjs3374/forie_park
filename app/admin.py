@@ -132,3 +132,43 @@ def export_visits():
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@admin_bp.route("/popups")
+@admin_required
+def popups():
+    return render_template("admin/popups.html", popups=models.popups_all())
+
+
+@admin_bp.route("/popups/new", methods=["POST"])
+@admin_required
+def popup_new():
+    title = (request.form.get("title") or "").strip()
+    content = (request.form.get("content") or "").strip()
+    start_date = (request.form.get("start_date") or "").strip() or None
+    end_date = (request.form.get("end_date") or "").strip() or None
+    if not title or not content:
+        flash("제목과 내용을 입력하세요.", "danger")
+        return redirect(url_for("admin.popups"))
+    models.popups_create({"title": title, "content": content,
+                          "start_date": start_date, "end_date": end_date, "is_active": True})
+    flash("팝업을 등록했습니다.", "success")
+    return redirect(url_for("admin.popups"))
+
+
+@admin_bp.route("/popups/<int:pid>/toggle", methods=["POST"])
+@admin_required
+def popup_toggle(pid):
+    p = models.popups_get(pid)
+    if not p:
+        abort(404)
+    models.popups_update(pid, {"is_active": not p.is_active})
+    return redirect(url_for("admin.popups"))
+
+
+@admin_bp.route("/popups/<int:pid>/delete", methods=["POST"])
+@admin_required
+def popup_delete(pid):
+    models.popups_delete(pid)
+    flash("팝업을 삭제했습니다.", "info")
+    return redirect(url_for("admin.popups"))

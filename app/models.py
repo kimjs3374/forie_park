@@ -229,6 +229,18 @@ class VisitRegistration:
         return _parse_dt(self._row.get("created_at"))
 
     @property
+    def actual_in_time(self):
+        return _parse_dt(self._row.get("actual_in_time"))
+
+    @property
+    def actual_out_time(self):
+        return _parse_dt(self._row.get("actual_out_time"))
+
+    @property
+    def visit_state(self):
+        return self._row.get("visit_state")  # None | entered | exited
+
+    @property
     def user_name(self):
         """PostgREST 임베드(parking_users(name))로 함께 조회된 신청자 이름."""
         u = self._row.get(T_USERS)
@@ -254,6 +266,12 @@ def visits_by_user(user_id, limit=None):
 def visits_get(reg_id):
     row = sb.fetch_one(T_VISITS, {"id": f"eq.{int(reg_id)}"})
     return VisitRegistration(row) if row else None
+
+
+def visits_active_by_car(car_number):
+    """같은 차량번호의 활성 등록 목록 (중복/연장 방지 검사용)."""
+    params = {"car_number": f"eq.{car_number}", "status": "eq.active"}
+    return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
 
 
 def visits_create(data):
@@ -284,6 +302,64 @@ def visits_filter(date_from=None, date_to=None, limit=None, with_user=False):
     if limit:
         params.append(("limit", str(limit)))
     return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
+
+
+# ---------------------------------------------------------- Popup(공지)
+T_POPUPS = "parking_popups"
+
+
+class Popup:
+    def __init__(self, row):
+        self._row = row or {}
+    @property
+    def id(self): return self._row.get("id")
+    @property
+    def title(self): return self._row.get("title")
+    @property
+    def content(self): return self._row.get("content")
+    @property
+    def is_active(self): return bool(self._row.get("is_active"))
+    @property
+    def start_date(self): return self._row.get("start_date")
+    @property
+    def end_date(self): return self._row.get("end_date")
+    @property
+    def created_at(self): return _parse_dt(self._row.get("created_at"))
+
+
+def popups_all():
+    return [Popup(r) for r in sb.fetch_rows(T_POPUPS, {"order": "created_at.desc"})]
+
+
+def popups_get(pid):
+    row = sb.fetch_one(T_POPUPS, {"id": f"eq.{int(pid)}"})
+    return Popup(row) if row else None
+
+
+def popups_create(data):
+    return Popup(sb.insert_row(T_POPUPS, data))
+
+
+def popups_update(pid, data):
+    return sb.patch_rows(T_POPUPS, data, {"id": f"eq.{int(pid)}"})
+
+
+def popups_delete(pid):
+    return sb.delete_rows(T_POPUPS, {"id": f"eq.{int(pid)}"})
+
+
+def popups_active_now(today):
+    today_s = today.isoformat() if hasattr(today, "isoformat") else str(today)
+    rows = sb.fetch_rows(T_POPUPS, {"is_active": "eq.true", "order": "created_at.desc"})
+    out = []
+    for r in rows:
+        sd, ed = r.get("start_date"), r.get("end_date")
+        if sd and sd > today_s:
+            continue
+        if ed and ed < today_s:
+            continue
+        out.append(Popup(r))
+    return out
 
 
 @login_manager.user_loader

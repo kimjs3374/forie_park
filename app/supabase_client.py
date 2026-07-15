@@ -64,6 +64,12 @@ def patch_rows(table, data, params):
     return resp.json()
 
 
+def delete_rows(table, params):
+    resp = requests.delete(f"{_base()}/{table}", headers=_headers(), params=params, timeout=15)
+    resp.raise_for_status()
+    return True
+
+
 def count_rows(table, params=None):
     p = dict(params or {})
     p.setdefault("select", "id")

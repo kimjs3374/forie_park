@@ -1,6 +1,6 @@
 """방문차량 등록 / 조회 / 취소 (입주민용)."""
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
@@ -32,8 +32,13 @@ def _parse_dt(value):
 @main_bp.route("/")
 @login_required
 def index():
-    regs = models.visits_by_user(current_user.id, limit=10)
-    return render_template("main/index.html", registrations=regs)
+    regs = models.visits_by_user(current_user.id)
+    now_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).replace(tzinfo=None)
+    overdue = [r for r in regs if r.status == "active" and r.visit_state == "entered"
+               and r.exit_time and r.exit_time.replace(tzinfo=None) < now_kst]
+    popups = models.popups_active_now(now_kst.date())
+    return render_template("main/index.html", registrations=regs[:10],
+                           overdue=overdue, popups=popups)
 
 
 @main_bp.route("/visits")
@@ -48,6 +53,8 @@ def visit_list():
 def visit_new():
     if request.method == "POST":
         car_number = (request.form.get("car_number") or "").strip().replace(" ", "")
+        visitor_phone = (request.form.get("visitor_phone") or "").strip()
+        visit_reason = (request.form.get("visit_reason") or "").strip()
         entry_time = _parse_dt(request.form.get("entry_time"))
         exit_time = _parse_dt(request.form.get("exit_time"))
 
@@ -56,6 +63,16 @@ def visit_new():
             errors.append("차량번호를 입력하세요.")
         elif not CAR_NUMBER_RE.match(car_number):
             errors.append("차량번호 형식이 올바르지 않습니다. 예) 12가3456, 123가4567, 서울12가3456")
+        if not visit_reason:
+            errors.append("방문사유를 입력하세요.")
+        elif len(visit_reason) > 100:
+            errors.append("방문사유는 100자 이내로 입력하세요.")
+        if not visitor_phone:
+            errors.append("방문자 연락처를 입력하세요.")
+        else:
+            _digits = re.sub(r"\D", "", visitor_phone)
+            if not (9 <= len(_digits) <= 13):
+                errors.append("방문자 연락처 형식이 올바르지 않습니다.")
         if not entry_time:
             errors.append("입차시간을 올바르게 입력하세요.")
         if not exit_time:
@@ -70,11 +87,24 @@ def visit_new():
                 flash(e, "danger")
             return render_template("main/visit_new.html", form=request.form)
 
+        # 중복(연장) 방지: 같은 차량번호 활성 등록과 방문기간이 겹치면 차단
+        for ex in models.visits_active_by_car(car_number):
+            ex_in = ex.entry_time.replace(tzinfo=None) if ex.entry_time else None
+            ex_out = ex.exit_time.replace(tzinfo=None) if ex.exit_time else None
+            if ex_in and ex_out and entry_time <= ex_out and exit_time >= ex_in:
+                can_from = (ex_out + timedelta(days=1)).strftime("%Y-%m-%d")
+                block_msg = (f"이 차량({car_number})은 이미 {ex_out.strftime('%Y-%m-%d')}까지 "
+                             f"등록되어 있습니다. {can_from}부터 다시 등록할 수 있습니다.")
+                return render_template("main/visit_new.html", form=request.form, block_msg=block_msg)
+
         reg = models.visits_create({
             "user_id": current_user.id,
             "dong": current_user.dong,
             "ho": current_user.ho,
+            "registrant_name": current_user.name,
             "car_number": car_number,
+            "visitor_phone": visitor_phone or None,
+            "visit_reason": visit_reason,
             "entry_time": entry_time.isoformat(),
             "exit_time": exit_time.isoformat(),
             "status": "active",

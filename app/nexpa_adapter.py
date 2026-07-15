@@ -1,30 +1,41 @@
-"""nexpa(주차관제) 연동 어댑터.
+"""nexpa(주차관제) 연동 어댑터 — 웹훅 핑 방식.
 
-[현재 상태] nexpa 연동 규격 미확정 → stub. 실제 전송은 하지 않고
-전송대기(pending) 상태로 보관만 한다.
+관리실 관제 PC의 동기화 에이전트에게 "새 변경 있으니 확인" 신호(핑)만 보낸다.
+데이터는 에이전트가 Supabase 에서 직접 읽어간다(우리는 Supabase 를 쓰기만, 관제 DB 는
+직접 건드리지 않는다). 핑이 실패해도 무시 — 에이전트의 안전망 폴링(수 분)이 회수하므로
+등록은 유실되지 않는다(멱등).
 
-[연동 확정 시 채울 부분]
-- 방향 B(권장): 우리는 '승인된 방문차량'을 합의된 인터페이스 테이블에 적재만 하고,
-  nexpa가 그것을 읽어 자기 운영 테이블에 반영한다.
-- 코콤 월패드 연동 규격이 확보되면 그 규격에 맞춰 send_to_nexpa()만 교체하면 된다.
-- 연동 상태 갱신이 필요하면 models.visits_update(reg.id, {...}) 로 처리한다.
+설정(.env):
+  NEXPA_AGENT_WEBHOOK = http://<관제PC tailnet IP>:42150/sync
+  NEXPA_AGENT_TOKEN   = 공유 토큰
 """
+import os
+import logging
+
+import requests
+
+log = logging.getLogger(__name__)
+
+
+def _ping(reason):
+    """에이전트로 동기화 핑(fire-and-forget). 실패는 폴링이 커버하므로 삼킨다."""
+    url = os.environ.get("NEXPA_AGENT_WEBHOOK", "")
+    if not url:
+        return False
+    token = os.environ.get("NEXPA_AGENT_TOKEN", "")
+    try:
+        requests.post(url, headers=({"X-Token": token} if token else {}), timeout=3)
+        return True
+    except Exception as e:
+        log.warning("nexpa 에이전트 핑 실패(%s) — 폴링이 회수: %s", reason, e)
+        return False
 
 
 def send_to_nexpa(registration):
-    """방문차량 등록 1건을 nexpa로 전송(예정).
-
-    현재는 미구현 stub. 호출해도 상태를 바꾸지 않고 그대로 둔다.
-    연동 규격 확정 후 이 함수 본문만 구현하면 된다.
-    """
-    # TODO: nexpa 연동 규격 확정 후 구현
-    #   ... nexpa 인터페이스 테이블 INSERT 또는 API 호출 ...
-    #   models.visits_update(registration.id, {"nexpa_sync_status": "synced",
-    #                                          "nexpa_synced_at": datetime.now(timezone.utc).isoformat()})
-    return False  # 아직 전송하지 않음
+    """방문차량 등록 → 에이전트에 즉시 반영 핑."""
+    return _ping("register")
 
 
 def cancel_on_nexpa(registration):
-    """nexpa 측 등록 취소(예정). 중복/수정/취소 규격은 nexpa와 협의 후 구현."""
-    # TODO: nexpa 연동 규격 확정 후 구현
-    return False
+    """방문차량 취소 → 에이전트에 즉시 반영 핑."""
+    return _ping("cancel")

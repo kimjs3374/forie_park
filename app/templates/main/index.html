@@ -16,12 +16,23 @@
 {% if registrations %}
   {% for r in registrations %}
   <div class="item">
-    <div>
+    <div style="min-width:0;">
       <div class="plate">{{ r.car_number }}</div>
-      <div class="time">{{ r.entry_time.strftime('%m/%d %H:%M') }} ~ {{ r.exit_time.strftime('%m/%d %H:%M') }}</div>
+      <div class="time" data-inout
+           data-in="{{ r.actual_in_time.isoformat() if r.actual_in_time else '' }}"
+           data-out="{{ r.actual_out_time.isoformat() if r.actual_out_time else '' }}"
+           data-state="{{ r.visit_state or '' }}">
+        예약 {{ r.entry_time.strftime('%m/%d') }} ~ {{ r.exit_time.strftime('%m/%d') }}<br>
+        입차 <span class="v-in">-</span> · 출차 <span class="v-out">-</span><br>
+        주차시간 <span class="v-dur">-</span>
+      </div>
     </div>
     {% if r.status == 'cancelled' %}
       <span class="badge-k b-cancel">취소됨</span>
+    {% elif r.visit_state == 'exited' %}
+      <span class="badge-k b-cancel">출차완료</span>
+    {% elif r.visit_state == 'entered' %}
+      <span class="badge-k b-ok">주차중</span>
     {% elif r.nexpa_sync_status == 'synced' %}
       <span class="badge-k b-ok">연동완료</span>
     {% else %}
@@ -33,4 +44,44 @@
   <div class="item" style="justify-content:center; color:var(--muted);">등록된 방문차량이 없습니다.</div>
 {% endif %}
 </div>
+
+{# ── #6 관리자 공지 팝업 (오늘 하루 안보기 가능) ── #}
+{% for p in popups %}
+<div class="modal-back popup-item" data-popup-id="{{ p.id }}">
+  <div class="modal-card">
+    <div class="modal-title" style="color:var(--primary);">{{ p.title }}</div>
+    <div class="modal-body">{{ p.content }}</div>
+    <div class="row2">
+      <button class="btn-k btn-ghost" style="min-height:52px;" onclick="popupDismissToday({{ p.id }})">오늘 하루 안보기</button>
+      <button class="btn-k btn-primary" style="min-height:52px;" onclick="popupClose({{ p.id }})">닫기</button>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{# ── #5 출차 미완료 경고 (닫기만 · 영구 안보기 불가 · 출차 시 자동 해제) ── #}
+{% if overdue %}
+<div class="modal-back" id="exitWarn" style="z-index:120;">
+  <div class="modal-card">
+    <div class="modal-title" style="color:var(--danger);">🚨 출차 미완료 안내</div>
+    <div class="modal-body">아래 방문차량이 예약 종료일까지 출차되지 않았습니다.
+출차가 확인되면 이 안내는 자동으로 사라집니다.
+
+{% for r in overdue %}• {{ r.car_number }} (예약 종료 ~{{ r.exit_time.strftime('%m/%d') }})
+{% endfor %}</div>
+    <button class="btn-k btn-primary" onclick="document.getElementById('exitWarn').style.display='none'">확인</button>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  function popupClose(id){ var el=document.querySelector('.popup-item[data-popup-id="'+id+'"]'); if(el) el.style.display='none'; }
+  function popupDismissToday(id){ try{ localStorage.setItem('popup_dismiss_'+id, new Date().toDateString()); }catch(e){} popupClose(id); }
+  (function(){
+    document.querySelectorAll('.popup-item').forEach(function(el){
+      var id=el.getAttribute('data-popup-id');
+      try{ if(localStorage.getItem('popup_dismiss_'+id)===new Date().toDateString()) el.style.display='none'; }catch(e){}
+    });
+  })();
+</script>
 {% endblock %}

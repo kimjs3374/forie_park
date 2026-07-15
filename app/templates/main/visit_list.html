@@ -11,15 +11,24 @@
   {% for r in registrations %}
   <div class="item" style="flex-direction:column; align-items:stretch;">
     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div>
+      <div style="min-width:0;">
         <div class="plate">{{ r.car_number }}</div>
-        <div class="time">
-          입차 {{ r.entry_time.strftime('%Y-%m-%d %H:%M') }}<br>
-          출차 {{ r.exit_time.strftime('%Y-%m-%d %H:%M') }}
+        <div class="time" data-inout
+             data-in="{{ r.actual_in_time.isoformat() if r.actual_in_time else '' }}"
+             data-out="{{ r.actual_out_time.isoformat() if r.actual_out_time else '' }}"
+             data-state="{{ r.visit_state or '' }}">
+          예약 {{ r.entry_time.strftime('%Y-%m-%d') }} ~ {{ r.exit_time.strftime('%Y-%m-%d') }}<br>
+          입차 <span class="v-in">-</span><br>
+          출차 <span class="v-out">-</span><br>
+          주차시간 <span class="v-dur">-</span>
         </div>
       </div>
       {% if r.status == 'cancelled' %}
         <span class="badge-k b-cancel">취소됨</span>
+      {% elif r.visit_state == 'exited' %}
+        <span class="badge-k b-cancel">출차완료</span>
+      {% elif r.visit_state == 'entered' %}
+        <span class="badge-k b-ok">주차중</span>
       {% elif r.nexpa_sync_status == 'synced' %}
         <span class="badge-k b-ok">연동완료</span>
       {% else %}
