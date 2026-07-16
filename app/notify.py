@@ -23,15 +23,24 @@ def _send(text):
         return False
 
 
-def send_signup_alert(name, dong, ho, phone, username):
-    """입주민 신규 가입 신청을 관리사무소에 알린다."""
+def send_signup_alert(name, dong, ho, phone, username, verified=None):
+    """입주민 신규 가입 신청을 관리사무소에 알린다.
+    verified: True=명부일치 자동승인, False=명부불일치 수동확인, None=대조 안함."""
+    if verified is True:
+        head = "🅿️ 주차 신규 가입 (명부 일치 → 자동승인 ✅)\n\n"
+        foot = "\n\n명부와 일치하여 자동 승인되었습니다."
+    elif verified is False:
+        head = "🅿️ 주차 신규 가입 (⚠️ 명부 불일치 — 수동확인 필요)\n\n"
+        foot = "\n\n명부에 없는 세대입니다. 관리자 페이지에서 확인 후 승인해주세요."
+    else:
+        head = "🅿️ 주차 신규 가입 신청\n\n"
+        foot = "\n\n관리자 페이지에서 승인해주세요."
     text = (
-        "🅿️ 주차 신규 가입 신청\n\n"
+        head +
         f"· 이름: {name}\n"
         f"· 동/호: {dong}동 {ho}호\n"
         f"· 연락처: {phone or '-'}\n"
-        f"· 아이디: {username}\n\n"
-        "관리자 페이지에서 승인해주세요."
+        f"· 아이디: {username}" + foot
     )
     return _send(text)
 

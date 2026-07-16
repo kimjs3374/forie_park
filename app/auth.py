@@ -1,8 +1,9 @@
 """회원가입 / 로그인 / 로그아웃 / 아이디·비번 찾기 / 비번 변경."""
 import secrets
 import string
+from datetime import datetime, timezone
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 
 from . import models
@@ -49,7 +50,14 @@ def register():
                 flash(e, "danger")
             return render_template("auth/register.html", form=request.form)
 
-        models.users_create({
+        # 입주민 명부 자동 대조 (동/호/이름 3키). 실패해도 가입은 진행 → 수동승인.
+        try:
+            verified = models.check_resident_match(dong, ho, name)
+        except Exception:
+            current_app.logger.exception("명부 대조 실패 → 수동승인(pending) 처리")
+            verified = False
+
+        user_data = {
             "username": username,
             "password_hash": models.make_password_hash(password),
             "name": name,
@@ -57,13 +65,19 @@ def register():
             "dong": dong,
             "ho": ho,
             "role": "resident",
-            "status": "pending",
-        })
+            "status": "approved" if verified else "pending",
+        }
+        if verified:
+            user_data["approved_at"] = datetime.now(timezone.utc).isoformat()
+        models.users_create(user_data)
 
-        # 관리사무소에 신규 가입 알림 (실패해도 가입은 정상 처리)
-        send_signup_alert(name, dong, ho, phone, username)
+        # 관리사무소 알림 (실패해도 가입은 정상 처리)
+        send_signup_alert(name, dong, ho, phone, username, verified=verified)
 
-        flash("가입 신청이 완료되었습니다. 관리사무소 승인 후 로그인할 수 있습니다.", "success")
+        if verified:
+            flash("명부 확인이 완료되어 가입이 승인되었습니다. 바로 로그인하세요.", "success")
+        else:
+            flash("가입 신청이 완료되었습니다. 관리사무소 승인 후 로그인할 수 있습니다.", "success")
         return redirect(url_for("auth.login"))
 
     return render_template("auth/register.html", form={})
