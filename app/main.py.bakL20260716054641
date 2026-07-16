@@ -38,23 +38,17 @@ def index():
                and r.exit_time and r.exit_time.replace(tzinfo=None) < now_kst]
     popups = models.popups_active_now(now_kst.date())
     shown = regs[:10]
-    logs_map = models.visit_logs_by_regs([r.id for r in shown])
-    now_utc = datetime.now(timezone.utc)
-    summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in shown}
-    dispmap = models.visit_dispmap(shown, now=now_utc, logs_map=logs_map)
+    dispmap = models.visit_dispmap(shown)
     return render_template("main/index.html", registrations=shown,
-                           overdue=overdue, popups=popups, dispmap=dispmap, summaries=summaries)
+                           overdue=overdue, popups=popups, dispmap=dispmap)
 
 
 @main_bp.route("/visits")
 @login_required
 def visit_list():
     regs = models.visits_by_user(current_user.id)
-    logs_map = models.visit_logs_by_regs([r.id for r in regs])
-    now_utc = datetime.now(timezone.utc)
-    summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in regs}
-    dispmap = models.visit_dispmap(regs, now=now_utc, logs_map=logs_map)
-    return render_template("main/visit_list.html", registrations=regs, dispmap=dispmap, summaries=summaries)
+    dispmap = models.visit_dispmap(regs)
+    return render_template("main/visit_list.html", registrations=regs, dispmap=dispmap)
 
 
 @main_bp.route("/visits/new", methods=["GET", "POST"])

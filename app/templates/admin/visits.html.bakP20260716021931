@@ -32,8 +32,8 @@
         <div class="plate" style="font-size:1.2rem;">{{ r.car_number }}
           <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ r.dong }}동 {{ r.ho }}호{% if r.user_name %} · {{ r.user_name }}{% endif %}</span></div>
         <div class="time" data-inout
-             data-in="{{ dispmap.get(r.id, ('',''))[0] }}"
-             data-out="{{ dispmap.get(r.id, ('',''))[1] }}"
+             data-in="{{ r.actual_in_time.isoformat() if r.actual_in_time else '' }}"
+             data-out="{{ r.actual_out_time.isoformat() if r.actual_out_time else '' }}"
              data-state="{{ r.visit_state or '' }}">
           예약 {{ r.entry_time.strftime('%Y-%m-%d %H:%M') }} ~ {{ r.exit_time.strftime('%Y-%m-%d %H:%M') }}<br>
           입차 <span class="v-in">-</span><br>

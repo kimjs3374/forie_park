@@ -43,7 +43,10 @@
 ## 4. 보안
 
 - 에이전트에 **service_role(만능키) 두지 말 것** — RLS 우회 + forie_kids까지 전체 노출.
-- `parking_visit_registrations` **읽기 + sync 컬럼 update만** 되는 제한키(RLS 정책/별도 롤)로.
+- **실제 구현 (2026-07-16 실측 확정)**: 에이전트는 **anon(publishable) 키**(`sb_publishable_...`, forie_kids `.env`의 `SUPABASE_ANON_KEY`)로 접근. anon 롤에 **컬럼 단위 GRANT + RLS 정책**으로 최소권한 부여:
+  - `parking_visit_registrations`: SELECT(정책 `agent_read_visits`) + **`actual_in_time`/`actual_out_time`/`visit_state`/`nexpa_registered` 컬럼만** UPDATE(정책 `agent_update_inout`). 그 외(`nexpa_sync_status`/`nexpa_synced_at`/`used_minutes`/`status`/`car_number`)는 anon UPDATE 불가 → 앱(service_role)만.
+  - `parking_visit_logs`: INSERT GRANT + insert 정책(anon). **SELECT는 안 엶**(차량번호=개인정보). → anon insert 시 `return=minimal` 필수(9장 함정 참조).
+  - 정책/GRANT 변경은 **Supabase SQL Editor**에서(REST로 DDL 불가). 반영 안 되면 `notify pgrst, 'reload schema';`.
 - 관제 DB 계정도 최소권한(해당 테이블 접근만) 권장.
 
 ---
@@ -151,3 +154,52 @@
 
 ---
 > 이 문서는 현장 조사하며 5장 빈칸을 채워 확정한다. 빈칸이 다 차면 6~8이 바로 구현 가능.
+
+---
+
+## 9. 입출차 로그 (parking_visit_logs) — 앱측 구현 완료 (2026-07-16)
+
+5.8의 "입출차 기록"을 앱에서 등록별 타임라인으로 보여주기 위한 **전용 로그 테이블**을 신설했다.
+한 방문등록에서 차량이 여러 번 드나든 이벤트를 **시간순으로 누적(append)** 한다.
+(기존 `actual_in_time`/`actual_out_time`/`visit_state`는 "마지막 입/출차·현재상태" 단일 필드라 이력이 안 남았음 → 로그로 보완.)
+
+### 테이블 (migrations_parking_visit_logs.sql, Supabase에 적용 완료)
+```sql
+create table public.parking_visit_logs (
+    id              bigint generated always as identity primary key,
+    registration_id bigint      not null references public.parking_visit_registrations(id) on delete cascade,
+    car_number      varchar(20) not null,
+    event_type      varchar(10) not null,   -- in | out
+    event_time      timestamptz not null,   -- 실제 입/출차 발생 시각(UTC 저장)
+    source          varchar(20) not null default 'nexpa',  -- nexpa | manual
+    raw             jsonb,                  -- 관제 원시 이벤트(멱등키/디버그용)
+    created_at      timestamptz not null default now()
+);
+-- 인덱스: registration_id, car_number, event_time / RLS enable
+```
+
+### 앱측 (구현·배포 완료)
+- `models.py`: `VisitLog`, `visit_logs_by_reg/by_regs`(테이블 없으면 빈 결과로 안전), `summarize_logs`(in/out 페어링 → 누적 주차시간·주차중 판정), `event_time_kst`(표시용 +9h).
+- `admin.py /admin/visits`: 등록별 로그 배치 조회 → 요약 전달.
+- `admin/visits.html`: 등록건마다 **"📋 입출차 로그 N건 · 총 주차 X시간" 토글(<details>) → 입/출 타임라인(KST) + 주차중 표시**. 로그 없으면 "입출차 기록 없음".
+
+### 에이전트가 채우는 규격 (6장 루프에 추가)
+관제 DB에서 방문차 **입/출차 이벤트를 감지할 때마다** parking_visit_logs에 INSERT(append):
+- `registration_id`: 이벤트의 차량번호로 해당 **active 등록**을 매칭(차량번호 + 이벤트시각이 entry~exit 기간 안). 못 찾으면 로그 스킵 or car_number만 기록.
+- `event_type`: 관제 입차→`in`, 출차→`out`.  `event_time`: 관제가 기록한 실제 시각(UTC로 변환 저장).
+- `source`: `nexpa`.  `raw`: 관제 이벤트 원본(멱등/디버그).
+- **멱등**: 같은 이벤트 중복 삽입 방지 — 관제쪽 이벤트 PK를 raw에 넣고 (registration_id,event_type,event_time) 또는 그 PK로 존재검사 후 insert. (원하면 DB UNIQUE 제약 추가)
+- **단일 필드 동기화(선택)**: append와 함께 사용자 화면용 `actual_in_time`(첫 in)/`actual_out_time`(마지막 out)/`visit_state`(entered|exited)도 PATCH하면 입주민 화면 상태도 갱신됨.
+
+### 키/보안 (실측 확정 2026-07-16)
+- 에이전트는 **anon(publishable) 키** 사용(service_role 아님). anon 롤에 **컬럼 단위 GRANT + RLS 정책**으로 최소권한 부여됨 — 상세는 4장 참조.
+- `parking_visit_logs`: anon INSERT(정책 있음) 가능, **SELECT는 안 엶**(차량번호 노출 방지) → 아래 `return=minimal` 함정 필수.
+- 위조 우려(anon insert가 열려 있음)는 anon SELECT를 닫고 컬럼 GRANT를 좁혀 완화. 추가로 관제망 격리·공유토큰으로 보완.
+
+### ⚠️ anon 로그 insert 함정 (2026-07-16 실측 해결)
+에이전트가 anon(publishable) 키로 parking_visit_logs 에 insert 할 때 **반드시 `Prefer: return=minimal`** 로 보낼 것.
+- 이유: anon 롤에는 이 테이블 **INSERT GRANT + insert 정책만** 부여(차량번호=개인정보라 anon SELECT 는 일부러 안 염).
+- `return=representation`(기본, 되읽기)으로 보내면 insert 는 되지만 반환 SELECT 단계에서 `new row violates row-level security policy` 401 이 뜬다(권한 문제 아님).
+- `return=minimal` 이면 되읽기 없이 201. (검증: minimal=201 성공, representation=401)
+- 앱(service_role)은 SELECT 되므로 관리자 화면 표시엔 영향 없음.
+- 멱등이 필요하면 anon SELECT 를 여는 대신 (registration_id,event_type,event_time) UNIQUE 제약 + on_conflict 로 처리(개인정보 노출 회피).

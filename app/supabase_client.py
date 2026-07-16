@@ -82,3 +82,24 @@ def count_rows(table, params=None):
         if tail.isdigit():
             return int(tail)
     return len(resp.json())
+
+
+def rpc(fn, payload=None):
+    """Postgres 함수 호출(POST /rest/v1/rpc/<fn>). 반환은 함수의 JSON 결과."""
+    resp = requests.post(f"{_base()}/rpc/{fn}", headers=_headers(), json=payload or {}, timeout=15)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def insert_rows(table, rows):
+    """여러 행 일괄 insert. rows 는 dict 리스트."""
+    if not rows:
+        return []
+    resp = requests.post(
+        f"{_base()}/{table}",
+        headers=_headers({"Prefer": "return=representation"}),
+        json=rows,
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return resp.json()

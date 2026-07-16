@@ -144,18 +144,13 @@
     function tick(){
       document.querySelectorAll('[data-inout]').forEach(function(el){
         var inv=el.getAttribute('data-in'), outv=el.getAttribute('data-out');
-        var vin=el.querySelector('.v-in'), vout=el.querySelector('.v-out'), vd=el.querySelector('.v-dur'), vs=el.querySelector('.v-sess');
+        var vin=el.querySelector('.v-in'), vout=el.querySelector('.v-out'), vd=el.querySelector('.v-dur');
         if(vin) vin.textContent = inv? fmt(inv) : '-';
         if(vout) vout.textContent = outv? fmt(outv) : '-';
         if(vd){
           if(!inv){ vd.textContent='-'; }
           else { var end = outv? new Date(outv) : new Date();
                  vd.textContent = durText(end - new Date(inv)) + (outv? '' : ' (주차중)'); }
-        }
-        if(vs){
-          if(!inv){ vs.textContent=''; }
-          else if(outv){ vs.textContent = '('+durText(new Date(outv) - new Date(inv))+')'; }
-          else { vs.textContent = '(주차중 '+durText(new Date() - new Date(inv))+')'; }
         }
       });
     }

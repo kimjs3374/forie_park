@@ -1,7 +1,6 @@
 """관리사무소(admin)용 화면 — 가입 승인 / 반려 및 전체 방문등록 조회."""
 import csv
 import io
-import re
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
@@ -89,12 +88,10 @@ def visits():
     logs_map = models.visit_logs_by_regs([r.id for r in regs])
     now_utc = datetime.now(timezone.utc)
     summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in regs}
-    dispmap = models.visit_dispmap(regs, now=now_utc, logs_map=logs_map)
     return render_template(
         "admin/visits.html",
         registrations=regs,
         summaries=summaries,
-        dispmap=dispmap,
         date_from=request.args.get("from", ""),
         date_to=request.args.get("to", ""),
     )
@@ -179,138 +176,3 @@ def popup_delete(pid):
     models.popups_delete(pid)
     flash("팝업을 삭제했습니다.", "info")
     return redirect(url_for("admin.popups"))
-
-
-# ------------------------------------------------------------ 입주민 명부(자동승인 기준)
-
-_DIR_HEADER_ALIASES = {
-    "dong": {"동", "dong", "동수", "aptdong", "apt_dong"},
-    "ho":   {"호", "호수", "호실", "ho", "aptho", "apt_ho"},
-    "name": {"이름", "성명", "name", "세대주", "입주민", "신청자"},
-}
-
-
-def _resolve_columns(header):
-    idx = {"dong": None, "ho": None, "name": None}
-    for i, cell in enumerate(header):
-        key = re.sub(r"\s", "", str(cell or "")).lower()
-        for col, aliases in _DIR_HEADER_ALIASES.items():
-            if idx[col] is None and key in {a.lower() for a in aliases}:
-                idx[col] = i
-    return idx
-
-
-def _parse_directory_file(file):
-    """업로드 파일(xlsx/csv) -> [(dong, ho, name), ...].
-    첫 행에서 동/호/이름 헤더를 찾고, 못 찾으면 앞 3열을 동/호/이름으로 간주."""
-    fname = (file.filename or "").lower()
-    if fname.endswith(".csv"):
-        data = file.read().decode("utf-8-sig", errors="replace")
-        rows = [r for r in csv.reader(io.StringIO(data)) if any((c or "").strip() for c in r)]
-    else:
-        import openpyxl
-        wb = openpyxl.load_workbook(io.BytesIO(file.read()), read_only=True, data_only=True)
-        ws = wb.active
-        rows = []
-        for r in ws.iter_rows(values_only=True):
-            cells = ["" if c is None else c for c in (r or [])]
-            if any(str(c).strip() for c in cells):
-                rows.append(cells)
-    if not rows:
-        return []
-    idx = _resolve_columns(rows[0])
-    if None not in idx.values():
-        body, di, hi, ni = rows[1:], idx["dong"], idx["ho"], idx["name"]
-    else:
-        body, di, hi, ni = rows, 0, 1, 2
-    out = []
-    for r in body:
-        if len(r) <= max(di, hi, ni):
-            continue
-        out.append((r[di], r[hi], r[ni]))
-    return out
-
-
-@admin_bp.route("/directory")
-@admin_required
-def directory():
-    q = (request.args.get("q") or "").strip()
-    try:
-        entries = models.directory_list(query=q or None)
-        total = models.directory_count()
-        table_ready = True
-    except Exception:
-        entries, total, table_ready = [], 0, False
-    return render_template("admin/directory.html",
-                           entries=entries, q=q, total=total, table_ready=table_ready)
-
-
-@admin_bp.route("/directory/upload", methods=["POST"])
-@admin_required
-def directory_upload():
-    file = request.files.get("file")
-    if not file or not file.filename:
-        flash("파일을 선택하세요.", "danger")
-        return redirect(url_for("admin.directory"))
-    try:
-        raw_rows = _parse_directory_file(file)
-    except Exception as e:
-        flash(f"파일을 읽지 못했습니다: {e}", "danger")
-        return redirect(url_for("admin.directory"))
-
-    seen, entries, skipped_dup, invalid = set(), [], 0, 0
-    for dong, ho, name in raw_rows:
-        dong, ho, name = str(dong).strip(), str(ho).strip(), str(name).strip()
-        if not dong or not ho or not name:
-            invalid += 1
-            continue
-        key = models.directory_match_key(dong, ho, name)
-        if key in seen:
-            skipped_dup += 1
-            continue
-        seen.add(key)
-        entries.append((dong, ho, name))
-
-    if not entries:
-        flash("유효한 행이 없습니다. (동/호/이름 컬럼을 확인하세요)", "danger")
-        return redirect(url_for("admin.directory"))
-
-    batch_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    try:
-        inserted = models.directory_replace_all(entries, batch_id)
-    except Exception as e:
-        flash(f"명부 저장 실패(1단계 DB SQL을 먼저 실행했는지 확인): {e}", "danger")
-        return redirect(url_for("admin.directory"))
-
-    msg = f"명부 {inserted}건으로 갱신했습니다."
-    if skipped_dup:
-        msg += f" 중복 {skipped_dup}건 제외."
-    if invalid:
-        msg += f" 누락행 {invalid}건 무시."
-    flash(msg, "success")
-    return redirect(url_for("admin.directory"))
-
-
-@admin_bp.route("/directory/add", methods=["POST"])
-@admin_required
-def directory_add():
-    dong = (request.form.get("dong") or "").strip()
-    ho = (request.form.get("ho") or "").strip()
-    name = (request.form.get("name") or "").strip()
-    if not dong or not ho or not name:
-        flash("동/호/이름을 모두 입력하세요.", "danger")
-        return redirect(url_for("admin.directory"))
-    try:
-        models.directory_add(dong, ho, name, batch_id="manual")
-        flash(f"{dong}동 {ho}호 {name} 명부에 추가했습니다.", "success")
-    except Exception as e:
-        flash(f"추가 실패(이미 있는 세대일 수 있음): {e}", "danger")
-    return redirect(url_for("admin.directory"))
-
-
-@admin_bp.route("/directory/<int:entry_id>/delete", methods=["POST"])
-@admin_required
-def directory_delete(entry_id):
-    models.directory_delete(entry_id)
-    flash("명부에서 삭제했습니다.", "info")
-    return redirect(url_for("admin.directory"))

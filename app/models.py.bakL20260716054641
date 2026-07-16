@@ -423,12 +423,11 @@ def summarize_logs(logs, now=None):
     outs = [lg.event_time for lg in logs if (not lg.is_in) and lg.event_time]
     first_in = min(ins) if ins else None
     last_out = None if parked_now else (max(outs) if outs else None)
-    latest_in = max(ins) if ins else None
     h, m = divmod(total, 60)
     total_text = (f"{h}시간 " if h else "") + f"{m}분"
     return {"logs": logs, "total_minutes": total, "total_text": total_text,
             "parked_now": parked_now, "pairs": pairs,
-            "first_in": first_in, "last_out": last_out, "latest_in": latest_in}
+            "first_in": first_in, "last_out": last_out}
 
 
 # ---------------------------------------------------------- Popup(공지)
@@ -444,7 +443,7 @@ def visit_dispmap(regs, now=None, logs_map=None):
         logs = logs_map.get(r.id, [])
         if logs:
             sm = summarize_logs(logs, now=now)
-            fi, lo = sm["latest_in"], sm["last_out"]
+            fi, lo = sm["first_in"], sm["last_out"]
             result[r.id] = (fi.isoformat() if fi else "", lo.isoformat() if lo else "")
         else:
             result[r.id] = (r.actual_in_time.isoformat() if r.actual_in_time else "",
@@ -515,96 +514,3 @@ def load_user(user_id):
         return users_get_by_id(user_id)
     except Exception:
         return None
-
-
-# ---------------------------------------------------------- Resident Directory(입주민 명부)
-# 실내놀이터/방문차량 공용 세대 명부. 동/호/이름 3키로 자동승인 매칭.
-import unicodedata
-
-T_DIRECTORY = "resident_directory"
-
-
-def directory_match_key(dong, ho, name):
-    """SQL directory_match_key() 와 동일 규칙의 파이썬 구현.
-    업로드 파일 내 중복제거용. 런타임 매칭의 진실원천은 SQL check_resident 이다."""
-    d = re.sub(r"\D", "", str(dong or ""))
-    h = re.sub(r"\D", "", str(ho or ""))
-    n = re.sub(r"\s", "", unicodedata.normalize("NFC", str(name or ""))).lower()
-    return f"{d}|{h}|{n}"
-
-
-class ResidentEntry:
-    def __init__(self, row):
-        self._row = row or {}
-
-    @property
-    def id(self):
-        return self._row.get("id")
-
-    @property
-    def dong(self):
-        return self._row.get("dong")
-
-    @property
-    def ho(self):
-        return self._row.get("ho")
-
-    @property
-    def name(self):
-        return self._row.get("name")
-
-    @property
-    def batch_id(self):
-        return self._row.get("batch_id")
-
-    @property
-    def created_at(self):
-        return _parse_dt(self._row.get("created_at"))
-
-    @property
-    def household_label(self):
-        return f"{self.dong}동 {self.ho}호"
-
-
-def directory_count():
-    return sb.count_rows(T_DIRECTORY, {"is_active": "eq.true"})
-
-
-def directory_list(query=None, limit=1000):
-    params = [("is_active", "eq.true"),
-              ("order", "dong.asc,ho.asc,name.asc"),
-              ("limit", str(limit))]
-    if query:
-        q = query.strip()
-        params.append(("or", f"(dong.ilike.*{q}*,ho.ilike.*{q}*,name.ilike.*{q}*)"))
-    return [ResidentEntry(r) for r in sb.fetch_rows(T_DIRECTORY, params)]
-
-
-def directory_add(dong, ho, name, batch_id=None):
-    data = {"dong": str(dong).strip(), "ho": str(ho).strip(),
-            "name": str(name).strip(), "batch_id": batch_id}
-    return ResidentEntry(sb.insert_row(T_DIRECTORY, data))
-
-
-def directory_delete(entry_id):
-    return sb.delete_rows(T_DIRECTORY, {"id": f"eq.{int(entry_id)}"})
-
-
-def directory_replace_all(entries, batch_id):
-    """명부 전체 교체: 기존 전부 삭제 후 새 목록 일괄 삽입.
-    entries: [(dong, ho, name), ...] (파일 내 중복제거 완료 상태). 반환: 삽입행 수."""
-    sb.delete_rows(T_DIRECTORY, {"id": "gt.0"})
-    rows = [{"dong": d, "ho": h, "name": n, "batch_id": batch_id} for (d, h, n) in entries]
-    inserted = 0
-    for i in range(0, len(rows), 500):
-        inserted += len(sb.insert_rows(T_DIRECTORY, rows[i:i + 500]))
-    return inserted
-
-
-def check_resident_match(dong, ho, name):
-    """SQL check_resident RPC 호출 → 명부 존재 여부(bool)."""
-    return bool(sb.rpc("check_resident", {
-        "p_dong": (dong or "").strip(),
-        "p_ho": (ho or "").strip(),
-        "p_name": (name or "").strip(),
-    }))

@@ -18,28 +18,14 @@
   <div class="item">
     <div style="min-width:0;">
       <div class="plate">{{ r.car_number }}</div>
-      {% set sm = summaries.get(r.id) %}
       <div class="time" data-inout
            data-in="{{ dispmap.get(r.id, ('',''))[0] }}"
            data-out="{{ dispmap.get(r.id, ('',''))[1] }}"
            data-state="{{ r.visit_state or '' }}">
         예약 {{ r.entry_time.strftime('%m/%d') }} ~ {{ r.exit_time.strftime('%m/%d') }}<br>
-        입차 <span class="v-in">-</span> · 출차 <span class="v-out">-</span> <span class="v-sess" style="color:var(--muted); font-size:.9em;"></span><br>
-        주차시간 <strong>{{ sm.total_text if sm and sm.logs else '-' }}</strong>{% if sm and sm.parked_now %} <span style="color:var(--primary);">(주차중)</span>{% endif %}
+        입차 <span class="v-in">-</span> · 출차 <span class="v-out">-</span><br>
+        주차시간 <span class="v-dur">-</span>
       </div>
-      {% if sm and sm.logs %}
-      <details style="margin-top:8px;">
-        <summary style="cursor:pointer; font-weight:700; color:var(--primary); list-style:none; font-size:.9rem;">📋 입출차 로그 {{ sm.logs|length }}건 · 총 {{ sm.total_text }}{% if sm.parked_now %} · 주차중{% endif %}</summary>
-        <div style="margin-top:8px; border-left:3px solid var(--line,#e5e7eb); padding-left:12px;">
-          {% for lg in sm.logs %}
-          <div style="display:flex; gap:8px; align-items:center; padding:4px 0;">
-            <span class="badge-k {{ 'b-ok' if lg.is_in else 'b-cancel' }}" style="min-width:44px; text-align:center;">{{ '입차' if lg.is_in else '출차' }}</span>
-            <span style="font-variant-numeric:tabular-nums; font-weight:600;">{{ lg.event_time_kst.strftime('%m/%d %H:%M') if lg.event_time_kst else '-' }}</span>
-          </div>
-          {% endfor %}
-        </div>
-      </details>
-      {% endif %}
     </div>
     {% if r.status == 'cancelled' %}
       <span class="badge-k b-cancel">취소됨</span>
