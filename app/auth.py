@@ -30,6 +30,7 @@ def register():
         phone = (request.form.get("phone") or "").strip()
         dong = (request.form.get("dong") or "").strip()
         ho = (request.form.get("ho") or "").strip()
+        consent = request.form.get("consent_agreed")
 
         errors = []
         if not username.isalnum() or len(username) < 4:
@@ -42,6 +43,8 @@ def register():
             errors.append("이름을 입력하세요.")
         if not dong or not ho:
             errors.append("동/호수를 입력하세요.")
+        if not consent:
+            errors.append("개인정보 수집·이용에 동의해야 가입할 수 있습니다.")
         if not errors and models.users_get_by_username(username):
             errors.append("이미 사용 중인 아이디입니다.")
 
@@ -69,7 +72,16 @@ def register():
         }
         if verified:
             user_data["approved_at"] = datetime.now(timezone.utc).isoformat()
-        models.users_create(user_data)
+        user_data["consent_agreed"] = True
+        user_data["consent_agreed_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            models.users_create(user_data)
+        except Exception:
+            # consent 컬럼 미생성 등 → 컬럼 제거 후 재시도(가입 자체는 보장)
+            current_app.logger.exception("동의 컬럼 포함 저장 실패 → 컬럼 제외 재시도")
+            user_data.pop("consent_agreed", None)
+            user_data.pop("consent_agreed_at", None)
+            models.users_create(user_data)
 
         # 관리사무소 알림 (실패해도 가입은 정상 처리)
         send_signup_alert(name, dong, ho, phone, username, verified=verified)

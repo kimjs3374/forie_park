@@ -20,7 +20,7 @@
         onsubmit="return confirm('기존 명부를 이 파일 내용으로 전체 교체합니다. 진행할까요?');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="file" name="file" accept=".xlsx,.csv" required
-           style="width:100%; padding:14px; border:2px dashed var(--line); border-radius:14px; background:#f8fafc; margin-bottom:12px;">
+           style="display:block; width:100%; min-width:0; padding:14px; border:2px dashed var(--line); border-radius:14px; background:#f8fafc; margin-bottom:12px;">
     <button class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem;">업로드 · 전체교체</button>
   </form>
 </div>
@@ -30,29 +30,33 @@
   <div style="font-weight:800; font-size:1.05rem; margin-bottom:12px;">개별 추가</div>
   <form method="post" action="{{ url_for('admin.directory_add') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="row2" style="grid-template-columns:1fr 1fr 1.4fr; gap:8px; margin-bottom:10px;">
+    <div class="row2" style="gap:10px; margin-bottom:10px;">
       <input name="dong" placeholder="동" required
-             style="height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem;">
+             style="width:100%; min-width:0; height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem; background:#f8fafc;">
       <input name="ho" placeholder="호" required
-             style="height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem;">
-      <input name="name" placeholder="이름" required
-             style="height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem;">
+             style="width:100%; min-width:0; height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem; background:#f8fafc;">
     </div>
+    <input name="name" placeholder="이름" required
+           style="width:100%; min-width:0; height:52px; border:2px solid var(--line); border-radius:12px; padding:0 12px; font-size:1.05rem; background:#f8fafc; margin-bottom:10px;">
     <button class="btn-k btn-ghost" style="min-height:48px; font-size:1rem;">추가</button>
   </form>
 </div>
 
 <!-- 검색 -->
 <form method="get" action="{{ url_for('admin.directory') }}" style="margin-bottom:14px;">
-  <div class="row2" style="grid-template-columns:1fr auto; gap:8px;">
+  <div style="display:flex; gap:8px;">
     <input name="q" value="{{ q }}" placeholder="동/호/이름 검색"
-           style="height:52px; border:2px solid var(--line); border-radius:12px; padding:0 14px; font-size:1.05rem; background:#fff;">
-    <button class="btn-k btn-ghost" style="min-height:52px; width:auto; padding:0 20px;">검색</button>
+           style="flex:1; min-width:0; height:52px; border:2px solid var(--line); border-radius:12px; padding:0 14px; font-size:1.05rem; background:#fff;">
+    <button class="btn-k btn-ghost" style="min-height:52px; width:auto; flex:0 0 auto; padding:0 20px;">검색</button>
   </div>
 </form>
 
 <div class="stack">
-{% if entries %}
+{% if not q %}
+  <div class="item" style="justify-content:center; color:var(--muted); text-align:center;">
+    검색어를 입력하면 명부가 표시됩니다.
+  </div>
+{% elif entries %}
   {% for e in entries %}
   <div class="item" style="align-items:center; padding:16px 18px;">
     <div>
@@ -67,9 +71,7 @@
   </div>
   {% endfor %}
 {% else %}
-  <div class="item" style="justify-content:center; color:var(--muted);">
-    {% if q %}"{{ q }}" 검색 결과가 없습니다.{% else %}등록된 명부가 없습니다. 위에서 파일을 업로드하세요.{% endif %}
-  </div>
+  <div class="item" style="justify-content:center; color:var(--muted);">"{{ q }}" 검색 결과가 없습니다.</div>
 {% endif %}
 </div>
 {% endblock %}

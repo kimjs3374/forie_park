@@ -236,8 +236,8 @@ def _parse_directory_file(file):
 def directory():
     q = (request.args.get("q") or "").strip()
     try:
-        entries = models.directory_list(query=q or None)
         total = models.directory_count()
+        entries = models.directory_list(query=q) if q else []
         table_ready = True
     except Exception:
         entries, total, table_ready = [], 0, False
