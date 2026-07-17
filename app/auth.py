@@ -47,6 +47,12 @@ def register():
             errors.append("개인정보 수집·이용에 동의해야 가입할 수 있습니다.")
         if not errors and models.users_get_by_username(username):
             errors.append("이미 사용 중인 아이디입니다.")
+        if not errors and dong and ho:
+            household = models.users_household_active(dong, ho)
+            if any((u.name or "").strip() == name for u in household):
+                errors.append("이미 가입되었거나 승인 대기 중인 세대원입니다.")
+            elif len(household) >= 2:
+                errors.append("한 세대당 최대 2개(아이디)까지만 가입할 수 있습니다.")
 
         if errors:
             for e in errors:
@@ -109,11 +115,13 @@ def login():
             flash("아이디 또는 비밀번호가 올바르지 않습니다.", "danger")
             return render_template("auth/login.html", username=username)
 
-        if user.status == "pending":
-            flash("아직 관리사무소 승인 대기 중입니다.", "warning")
-            return render_template("auth/login.html", username=username)
-        if user.status == "rejected":
-            flash("가입이 반려되었습니다. 관리사무소에 문의하세요.", "danger")
+        if user.status != "approved":
+            _msg = {
+                "pending": "아직 관리사무소 승인 대기 중입니다.",
+                "rejected": "가입이 반려되었습니다. 관리사무소에 문의하세요.",
+                "withdrawn": "이사(퇴거) 처리된 계정입니다. 관리사무소에 문의하세요.",
+            }.get(user.status, "로그인할 수 없는 계정입니다. 관리사무소에 문의하세요.")
+            flash(_msg, "warning" if user.status == "pending" else "danger")
             return render_template("auth/login.html", username=username)
 
         login_user(user)

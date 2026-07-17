@@ -3,8 +3,8 @@
 {% block content %}
 <div class="section-title"><span>가입 승인 관리</span></div>
 
-<div class="row2" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:16px; gap:8px;">
-  {% set tabs = [('pending','대기'),('approved','승인'),('rejected','반려')] %}
+<div class="row2" style="grid-template-columns:1fr 1fr 1fr 1fr; margin-bottom:16px; gap:6px;">
+  {% set tabs = [('pending','대기'),('approved','승인'),('rejected','반려'),('withdrawn','이사')] %}
   {% for key, label in tabs %}
   <a href="{{ url_for('admin.users', status=key) }}" class="btn-k {{ 'btn-primary' if status==key else 'btn-ghost' }}"
      style="min-height:48px; font-size:1rem; text-decoration:none;">{{ label }}</a>
@@ -35,6 +35,13 @@
         <button class="btn-k btn-danger-o">반려</button>
       </form>
     </div>
+    {% endif %}
+    {% if status == 'approved' %}
+    <form method="post" action="{{ url_for('admin.withdraw_user', user_id=u.id) }}"
+          onsubmit="return confirm('이사(퇴거) 처리하시겠습니까? 로그인이 차단되고 세대 정원에서 제외됩니다.');" style="margin-top:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-k btn-danger-o">이사·탈퇴 처리</button>
+    </form>
     {% endif %}
   </div>
   {% endfor %}

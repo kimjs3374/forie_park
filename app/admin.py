@@ -41,7 +41,7 @@ def dashboard():
 @admin_required
 def users():
     status = request.args.get("status", "pending")
-    if status not in ("pending", "approved", "rejected"):
+    if status not in ("pending", "approved", "rejected", "withdrawn"):
         status = None
     user_list = models.users_list(role="resident", status=status)
     return render_template("admin/users.html", users=user_list, status=request.args.get("status", "pending"))
@@ -71,6 +71,17 @@ def reject_user(user_id):
     models.users_update(user_id, {"status": "rejected"})
     flash(f"{user.name}({user.household_label}) 가입을 반려했습니다.", "warning")
     return redirect(url_for("admin.users", status="pending"))
+
+
+@admin_bp.route("/users/<int:user_id>/withdraw", methods=["POST"])
+@admin_required
+def withdraw_user(user_id):
+    user = models.users_get_by_id(user_id)
+    if not user:
+        abort(404)
+    models.users_update(user_id, {"status": "withdrawn"})
+    flash(f"{user.name}({user.household_label}) 이사·탈퇴 처리했습니다. 로그인이 차단됩니다.", "info")
+    return redirect(url_for("admin.users", status="approved"))
 
 
 def _parse_date(value):
@@ -235,14 +246,22 @@ def _parse_directory_file(file):
 @admin_required
 def directory():
     q = (request.args.get("q") or "").strip()
+    dong = (request.args.get("dong") or "").strip()
+    dong_summary = []
     try:
         total = models.directory_count()
-        entries = models.directory_list(query=q) if q else []
         table_ready = True
+        if q:
+            entries = models.directory_list(query=q)
+        elif dong:
+            entries = models.directory_list(dong=dong)
+        else:
+            entries = []
+            dong_summary = models.directory_dong_summary()
     except Exception:
         entries, total, table_ready = [], 0, False
-    return render_template("admin/directory.html",
-                           entries=entries, q=q, total=total, table_ready=table_ready)
+    return render_template("admin/directory.html", entries=entries, q=q, dong=dong,
+                           total=total, table_ready=table_ready, dong_summary=dong_summary)
 
 
 @admin_bp.route("/directory/upload", methods=["POST"])

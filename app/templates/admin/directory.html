@@ -42,36 +42,51 @@
   </form>
 </div>
 
-<!-- 검색 -->
+<!-- 이름 검색 -->
 <form method="get" action="{{ url_for('admin.directory') }}" style="margin-bottom:14px;">
   <div style="display:flex; gap:8px;">
-    <input name="q" value="{{ q }}" placeholder="동/호/이름 검색"
+    <input name="q" value="{{ q }}" placeholder="이름/동/호 검색"
            style="flex:1; min-width:0; height:52px; border:2px solid var(--line); border-radius:12px; padding:0 14px; font-size:1.05rem; background:#fff;">
     <button class="btn-k btn-ghost" style="min-height:52px; width:auto; flex:0 0 auto; padding:0 20px;">검색</button>
   </div>
 </form>
 
 <div class="stack">
-{% if not q %}
-  <div class="item" style="justify-content:center; color:var(--muted); text-align:center;">
-    검색어를 입력하면 명부가 표시됩니다.
-  </div>
-{% elif entries %}
-  {% for e in entries %}
-  <div class="item" style="align-items:center; padding:16px 18px;">
-    <div>
-      <span style="font-weight:800; font-size:1.05rem;">{{ e.name }}</span>
-      <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ e.household_label }}</span>
+{% if q or dong %}
+  <a href="{{ url_for('admin.directory') }}" style="color:var(--primary); font-weight:700; text-decoration:none; margin:0 0 4px 4px;">← 동 목록으로</a>
+  {% if dong %}<div class="sub" style="margin:0 0 4px 4px;">{{ dong }}동 세대원 {{ entries|length }}명</div>{% endif %}
+  {% if entries %}
+    {% for e in entries %}
+    <div class="item" style="align-items:center; padding:16px 18px;">
+      <div>
+        <span style="font-weight:800; font-size:1.05rem;">{{ e.name }}</span>
+        <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ e.household_label }}</span>
+      </div>
+      <form method="post" action="{{ url_for('admin.directory_delete', entry_id=e.id) }}"
+            onsubmit="return confirm('{{ e.household_label }} {{ e.name }} 명부에서 삭제할까요?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn-k btn-danger-o" style="min-height:40px; width:auto; padding:0 16px; font-size:.9rem;">삭제</button>
+      </form>
     </div>
-    <form method="post" action="{{ url_for('admin.directory_delete', entry_id=e.id) }}"
-          onsubmit="return confirm('{{ e.household_label }} {{ e.name }} 명부에서 삭제할까요?');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn-k btn-danger-o" style="min-height:40px; width:auto; padding:0 16px; font-size:.9rem;">삭제</button>
-    </form>
+    {% endfor %}
+  {% else %}
+    <div class="item" style="justify-content:center; color:var(--muted);">
+      {% if q %}"{{ q }}" 검색 결과가 없습니다.{% else %}{{ dong }}동 세대원이 없습니다.{% endif %}
+    </div>
+  {% endif %}
+{% elif dong_summary %}
+  <div class="sub" style="margin:0 0 6px 4px;">동을 선택하거나 위 검색창을 이용하세요.</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+    {% for d, n in dong_summary %}
+    <a href="{{ url_for('admin.directory', dong=d) }}" class="card-k"
+       style="text-decoration:none; color:var(--ink); text-align:center; padding:16px 6px;">
+      <div style="font-weight:800; font-size:1.15rem;">{{ d }}동</div>
+      <div style="color:var(--muted); font-size:.82rem; margin-top:2px;">{{ n }}명</div>
+    </a>
+    {% endfor %}
   </div>
-  {% endfor %}
 {% else %}
-  <div class="item" style="justify-content:center; color:var(--muted);">"{{ q }}" 검색 결과가 없습니다.</div>
+  <div class="item" style="justify-content:center; color:var(--muted);">등록된 명부가 없습니다. 위에서 파일을 업로드하세요.</div>
 {% endif %}
 </div>
 {% endblock %}

@@ -151,6 +151,16 @@ def users_count(role=None, status=None):
     return sb.count_rows(T_USERS, params)
 
 
+def users_household_active(dong, ho):
+    """해당 세대(동/호)의 반려되지 않은 계정 목록(pending+approved). 세대당 인원/중복 검사용."""
+    params = {
+        "dong": f"eq.{(dong or '').strip()}",
+        "ho": f"eq.{(ho or '').strip()}",
+        "status": "in.(pending,approved)",
+    }
+    return [User(r) for r in sb.fetch_rows(T_USERS, params)]
+
+
 def _norm_phone(value):
     """연락처 비교용 정규화(숫자만). 저장 포맷 차이(하이픈 등) 흡수."""
     return re.sub(r"\D", "", str(value or ""))
@@ -570,14 +580,28 @@ def directory_count():
     return sb.count_rows(T_DIRECTORY, {"is_active": "eq.true"})
 
 
-def directory_list(query=None, limit=1000):
+def directory_list(query=None, dong=None, limit=2000):
     params = [("is_active", "eq.true"),
               ("order", "dong.asc,ho.asc,name.asc"),
               ("limit", str(limit))]
+    if dong:
+        params.append(("dong", f"eq.{dong.strip()}"))
     if query:
         q = query.strip()
         params.append(("or", f"(dong.ilike.*{q}*,ho.ilike.*{q}*,name.ilike.*{q}*)"))
     return [ResidentEntry(r) for r in sb.fetch_rows(T_DIRECTORY, params)]
+
+
+def directory_dong_summary():
+    """동별 세대원 수 요약 → [[dong, count], ...] (동 숫자 오름차순)."""
+    from collections import Counter
+    rows = sb.fetch_rows(T_DIRECTORY, [("select", "dong"), ("is_active", "eq.true"), ("limit", "10000")])
+    counter = Counter((r.get("dong") or "").strip() for r in rows if (r.get("dong") or "").strip())
+
+    def _key(d):
+        return (0, int(d)) if d.isdigit() else (1, d)
+
+    return sorted(([d, n] for d, n in counter.items()), key=lambda x: _key(x[0]))
 
 
 def directory_add(dong, ho, name, batch_id=None):
