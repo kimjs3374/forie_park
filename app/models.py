@@ -625,6 +625,32 @@ def directory_replace_all(entries, batch_id):
     return inserted
 
 
+def directory_delete_by_identity(dong, ho, name):
+    """동/호/이름(정규화 match_key) 일치하는 명부 항목 삭제. 이사·탈퇴 연동용."""
+    key = directory_match_key(dong, ho, name)
+    return sb.delete_rows(T_DIRECTORY, {"match_key": f"eq.{key}"})
+
+
+def directory_merge(entries, batch_id):
+    """명부 보완(병합): 기존 유지, DB에 없는 세대원만 추가. 반환 (added, skipped_exist).
+    entries: [(dong, ho, name), ...] (파일 내 중복제거 완료)."""
+    existing = set()
+    for r in sb.fetch_rows(T_DIRECTORY, [("select", "match_key"), ("is_active", "eq.true"), ("limit", "100000")]):
+        k = r.get("match_key") or ""
+        if k:
+            existing.add(k)
+    rows, skipped = [], 0
+    for (d, h, n) in entries:
+        if directory_match_key(d, h, n) in existing:
+            skipped += 1
+            continue
+        rows.append({"dong": d, "ho": h, "name": n, "batch_id": batch_id})
+    added = 0
+    for i in range(0, len(rows), 500):
+        added += len(sb.insert_rows(T_DIRECTORY, rows[i:i + 500]))
+    return added, skipped
+
+
 def check_resident_match(dong, ho, name):
     """SQL check_resident RPC 호출 → 명부 존재 여부(bool)."""
     return bool(sb.rpc("check_resident", {

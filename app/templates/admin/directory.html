@@ -15,13 +15,13 @@
 <!-- 엑셀/CSV 업로드 -->
 <div class="card-k" style="padding:22px; margin-bottom:16px;">
   <div style="font-weight:800; font-size:1.1rem; margin-bottom:6px;">명부 업로드 (엑셀/CSV)</div>
-  <div class="sub" style="margin:0 0 14px;">동·호·이름 컬럼이 있는 파일. 업로드 시 <b>기존 명부를 전체 교체</b>합니다.</div>
+  <div class="sub" style="margin:0 0 14px;">동·호·이름 컬럼이 있는 파일. 업로드 시 <b>기존 명부에 없는 세대원만 추가</b>됩니다(보완, 기존 유지).</div>
   <form method="post" action="{{ url_for('admin.directory_upload') }}" enctype="multipart/form-data"
-        onsubmit="return confirm('기존 명부를 이 파일 내용으로 전체 교체합니다. 진행할까요?');">
+        onsubmit="return confirm('파일에서 기존 명부에 없는 세대원을 추가합니다(기존 유지). 진행할까요?');">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="file" name="file" accept=".xlsx,.csv" required
            style="display:block; width:100%; min-width:0; padding:14px; border:2px dashed var(--line); border-radius:14px; background:#f8fafc; margin-bottom:12px;">
-    <button class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem;">업로드 · 전체교체</button>
+    <button class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem;">업로드 · 명부 보완</button>
   </form>
 </div>
 

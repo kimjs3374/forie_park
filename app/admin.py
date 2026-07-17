@@ -80,7 +80,11 @@ def withdraw_user(user_id):
     if not user:
         abort(404)
     models.users_update(user_id, {"status": "withdrawn"})
-    flash(f"{user.name}({user.household_label}) 이사·탈퇴 처리했습니다. 로그인이 차단됩니다.", "info")
+    try:
+        models.directory_delete_by_identity(user.dong, user.ho, user.name)
+    except Exception:
+        pass
+    flash(f"{user.name}({user.household_label}) 이사·탈퇴 처리했습니다. 로그인 차단 + 명부에서 제거됩니다.", "info")
     return redirect(url_for("admin.users", status="approved"))
 
 
@@ -296,14 +300,16 @@ def directory_upload():
 
     batch_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     try:
-        inserted = models.directory_replace_all(entries, batch_id)
+        added, skipped_exist = models.directory_merge(entries, batch_id)
     except Exception as e:
         flash(f"명부 저장 실패(1단계 DB SQL을 먼저 실행했는지 확인): {e}", "danger")
         return redirect(url_for("admin.directory"))
 
-    msg = f"명부 {inserted}건으로 갱신했습니다."
+    msg = f"명부에 {added}명 추가했습니다."
+    if skipped_exist:
+        msg += f" 이미 있는 {skipped_exist}명 유지."
     if skipped_dup:
-        msg += f" 중복 {skipped_dup}건 제외."
+        msg += f" 파일 내 중복 {skipped_dup}건 제외."
     if invalid:
         msg += f" 누락행 {invalid}건 무시."
     flash(msg, "success")
