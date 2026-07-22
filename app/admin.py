@@ -43,8 +43,47 @@ def users():
     status = request.args.get("status", "pending")
     if status not in ("pending", "approved", "rejected", "withdrawn"):
         status = None
-    user_list = models.users_list(role="resident", status=status)
-    return render_template("admin/users.html", users=user_list, status=request.args.get("status", "pending"))
+    # role 로 거르지 않는다 — 그룹을 동대표/직원으로 바꾼 계정이 목록에서 사라지면 안 된다.
+    # 관리사무소 계정만 제외한다(이 화면에서 다룰 대상이 아니다).
+    user_list = [u for u in models.users_list(status=status) if not u.is_admin]
+    return render_template("admin/users.html", users=user_list,
+                           status=request.args.get("status", "pending"),
+                           role_choices=[(r, models.role_label(r)) for r in models.ROLE_CHOICES])
+
+
+@admin_bp.route("/users/<int:user_id>/role", methods=["POST"])
+@admin_required
+def change_role(user_id):
+    """그룹(입주민/동대표/관리사무소 직원/관리사무소) 지정."""
+    user = models.users_get_by_id(user_id)
+    if not user:
+        abort(404)
+
+    role = (request.form.get("role") or "").strip()
+    back = redirect(url_for("admin.users", status=request.form.get("status") or "approved"))
+    if role not in models.ROLE_CHOICES:
+        flash("알 수 없는 그룹입니다.", "danger")
+        return back
+    if str(user.id) == str(current_user.id):
+        # 스스로 권한을 내려놓아 관리 화면에 못 들어가는 상황을 막는다.
+        flash("본인 계정의 그룹은 바꿀 수 없습니다.", "danger")
+        return back
+
+    payload = {"role": role}
+    if role == models.ROLE_ADMIN:
+        # 관리사무소 계정은 카카오 로그인을 쓸 수 없다. 비밀번호가 없는 계정을 승격시키면
+        # 그 순간 로그인 수단이 사라져 계정이 잠긴다.
+        if not user.has_password:
+            flash("카카오로만 로그인하는 계정은 관리사무소로 지정할 수 없습니다. "
+                  "먼저 아이디·비밀번호를 설정하게 해주세요.", "danger")
+            return back
+        if user.provider_uid:
+            # 남아 있어도 로그인 때 거부되지만, 상태가 헷갈리므로 연결을 정리한다.
+            payload.update({"provider": "local", "provider_uid": None, "linked_at": None})
+
+    models.users_update(user_id, payload)
+    flash(f"{user.name} 님을 '{models.role_label(role)}' 그룹으로 지정했습니다.", "success")
+    return back
 
 
 @admin_bp.route("/users/<int:user_id>/approve", methods=["POST"])

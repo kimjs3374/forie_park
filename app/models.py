@@ -19,6 +19,26 @@ from . import supabase_client as sb
 T_USERS = "forie_users"
 T_VISITS = "parking_visit_registrations"
 
+# ---------------------------------------------------------------- 그룹(role)
+# 지금 관리 권한을 갖는 것은 ROLE_ADMIN 하나뿐이다. 나머지는 라벨로만 구분한다.
+ROLE_RESIDENT = "resident"
+ROLE_REP = "rep"
+ROLE_STAFF = "staff"
+ROLE_ADMIN = "admin"
+
+ROLE_LABELS = {
+    ROLE_RESIDENT: "입주민",
+    ROLE_REP: "동대표",
+    ROLE_STAFF: "관리사무소 직원",
+    ROLE_ADMIN: "관리사무소",
+}
+ROLE_CHOICES = [ROLE_RESIDENT, ROLE_REP, ROLE_STAFF, ROLE_ADMIN]
+
+
+def role_label(role):
+    return ROLE_LABELS.get(role or ROLE_RESIDENT, role or "")
+
+
 
 def make_password_hash(raw):
     return generate_password_hash(raw)
@@ -123,7 +143,19 @@ class User(UserMixin):
 
     @property
     def is_admin(self):
-        return self.role == "admin"
+        return self.role == ROLE_ADMIN
+
+    @property
+    def role_label(self):
+        return ROLE_LABELS.get(self.role, self.role)
+
+    @property
+    def social_login_allowed(self):
+        """관리 권한이 있는 계정은 외부 인증(카카오)을 쓰지 않는다.
+
+        카카오 계정이 탈취되면 관리 권한까지 함께 넘어가기 때문이다.
+        """
+        return self.role != ROLE_ADMIN
 
     @property
     def is_approved(self):
