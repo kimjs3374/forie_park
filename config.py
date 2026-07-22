@@ -26,6 +26,10 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+    # 통합 로그인(SSO) 서명키 — 세 앱이 동일한 값을 쓴다. SECRET_KEY 와는 다른 값이어야
+    # 한다(세션 서명키를 공유하면 앱 간 세션 위조가 가능해진다).
+    SSO_SECRET = os.environ.get("SSO_SECRET", "")
+
     # 카카오 로그인 (REST API 키 + 클라이언트 시크릿)
     # 시크릿은 카카오 콘솔에서 기본 활성화 상태로 발급된다. 켜져 있으면 토큰 요청에
     # 반드시 함께 보내야 하며, 빠뜨리면 KOE010(Bad client credentials)이 난다.

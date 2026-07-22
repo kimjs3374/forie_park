@@ -1,6 +1,6 @@
-from flask import Flask, redirect, request, url_for
-from flask_login import current_user
+from flask import Flask
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from config import Config
 from .extensions import login_manager
@@ -10,6 +10,9 @@ csrf = CSRFProtect()
 
 def create_app(config_class=Config):
     app = Flask(__name__)
+    # nginx(Cloudflare 뒤)가 넘겨주는 X-Forwarded-Proto/Host 를 신뢰한다.
+    # 이게 없으면 request.url 이 http:// 로 만들어져 SSO 의 next 검증에 걸린다.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
     app.config.from_object(config_class)
 
     # 확장 초기화 (DB는 Supabase REST 사용 → SQLAlchemy 없음)
@@ -19,27 +22,19 @@ def create_app(config_class=Config):
     # 모델 등록 (user_loader 바인딩)
     from . import models  # noqa: F401
 
+    # 통합 로그인(SSO) — 이 앱은 SP 다. .forie.kr 공유 쿠키를 검증만 하고,
+    # 발급과 로그인 화면은 IdP(forie.kr)가 맡는다. 미인증이면 IdP 로 보낸다.
+    from .forie_auth import init_sso
+    init_sso(app, models.users_get_by_id)
+
     # 블루프린트 등록
     from .auth import auth_bp
     from .main import main_bp
     from .admin import admin_bp
-    from .oauth import oauth_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(oauth_bp)
-
-    # 임시 비밀번호 로그인 시 비번 변경 강제 (변경 전까지 다른 페이지 차단)
-    @app.before_request
-    def _force_password_change():
-        if not current_user.is_authenticated:
-            return None
-        if not current_user.must_change_password:
-            return None
-        if request.endpoint in {"auth.change_password", "auth.logout", "static"}:
-            return None
-        return redirect(url_for("auth.change_password"))
 
     # 보안 응답 헤더 (Cloudflare 뒤 HTTPS)
     @app.after_request

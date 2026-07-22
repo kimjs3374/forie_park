@@ -5,6 +5,5 @@ DB는 Supabase REST(supabase_client)로 대체되어 SQLAlchemy/Migrate는 제�
 from flask_login import LoginManager
 
 login_manager = LoginManager()
-login_manager.login_view = "auth.login"
-login_manager.login_message = "로그인이 필요합니다."
-login_manager.login_message_category = "warning"
+# 미인증 처리는 forie_auth.init_sso() 의 unauthorized_handler 가 맡는다(IdP 로 리다이렉트).
+# login_view 를 두면 그쪽이 먼저 잡히므로 설정하지 않는다.
