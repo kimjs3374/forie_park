@@ -521,13 +521,24 @@ def summarize_logs(logs, now=None):
     if parked_now:
         pairs.append((open_in, None))
 
+    def _minutes_between(start, finish):
+        """초 단위는 버리고 분 단위로만 센다(main/models._minutes_between 과 같은 규칙).
+
+        14:28:50 ~ 14:29:10 은 초로는 20초지만 기록상 14:28 -> 14:29 이므로 1분이다.
+        """
+        if not start or not finish:
+            return 0
+        s = start.replace(second=0, microsecond=0)
+        f = finish.replace(second=0, microsecond=0)
+        return max(1, int((f - s).total_seconds() // 60))
+
     total = 0
     for i_ev, o_ev in pairs:
         if not i_ev:
             continue
         end = o_ev.event_time if o_ev else now
         if i_ev.event_time and end:
-            total += max(0, int((end - i_ev.event_time).total_seconds() // 60))
+            total += _minutes_between(i_ev.event_time, end)
     ins = [lg.event_time for lg in logs if lg.is_in and lg.event_time]
     outs = [lg.event_time for lg in logs if (not lg.is_in) and lg.event_time]
     first_in = min(ins) if ins else None
