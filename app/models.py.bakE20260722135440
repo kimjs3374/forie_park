@@ -354,15 +354,6 @@ class VisitRegistration:
         return bool(self._row.get("nexpa_registered"))
 
     @property
-    def is_expired(self):
-        """유효기간(exit_time) 경과 여부 — '등록완료'를 '만료'로 가르는 표시 전용.
-        게이트 개방은 넥스파가 자체 KST 창으로 판단하므로 이 값과 무관."""
-        et = self.exit_time
-        if et is None:
-            return False
-        return datetime.now(timezone.utc) > et
-
-    @property
     def user_name(self):
         """PostgREST 임베드(forie_users(name))로 함께 조회된 신청자 이름."""
         u = self._row.get(T_USERS)

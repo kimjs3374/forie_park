@@ -47,10 +47,8 @@
       <span class="badge-k b-cancel">출차완료</span>
     {% elif r.visit_state == 'entered' %}
       <span class="badge-k b-ok">주차중</span>
-    {% elif r.nexpa_registered and not r.is_expired %}
+    {% elif r.nexpa_registered %}
       <span class="badge-k b-ok">등록완료</span>
-    {% elif r.nexpa_registered and r.is_expired %}
-      <span class="badge-k b-cancel">만료</span>
     {% else %}
       <span class="badge-k b-wait">등록중</span>
     {% endif %}

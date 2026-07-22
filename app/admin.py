@@ -1,5 +1,6 @@
 """관리사무소(admin)용 화면 — 가입 승인 / 반려 및 전체 방문등록 조회."""
 import csv
+import io          # CSV 내보내기에서 쓴다
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
