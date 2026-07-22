@@ -24,7 +24,7 @@
 """
 from urllib.parse import quote
 
-from flask import current_app, redirect, request
+from flask import current_app, redirect, request, session
 from flask_login import current_user
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -132,6 +132,18 @@ def init_sso(app, user_loader, issuer=False):
     app.config.setdefault("SSO_MODULE_VERSION", SSO_MODULE_VERSION)
     if not app.config.get("SSO_SECRET"):
         app.logger.warning("SSO_SECRET 미설정 — 통합 로그인이 동작하지 않습니다.")
+
+    @app.before_request
+    def _drop_stale_session_login():
+        """SSO 도입 전 자체 로그인으로 남은 세션 잔재를 버린다.
+
+        flask-login 은 세션의 _user_id 를 request_loader 보다 먼저 보기 때문에,
+        이 잔재가 남아 있으면 공유 쿠키가 가리키는 계정과 다른 사람으로 인식된다.
+        신원의 단일 진실원천은 SSO 쿠키 하나다.
+        """
+        for key in ("_user_id", "_fresh", "_id"):
+            if key in session:
+                session.pop(key, None)
 
     @login_manager.request_loader
     def _load_user_from_sso(req):
