@@ -13,8 +13,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from .extensions import login_manager
 from . import supabase_client as sb
 
-# 같은 Supabase 프로젝트를 forie_kids(놀이터)와 공유하므로 parking_ 프리픽스로 구분.
-T_USERS = "parking_users"
+# 같은 Supabase 프로젝트를 forie_kids(놀이터)와 공유하므로 parking 전용 테이블은
+# parking_ 프리픽스로 구분한다. 단 forie_users 는 main/kids/parking 이 공유하는
+# 통합 계정 테이블이라 프리픽스가 없다.
+T_USERS = "forie_users"
 T_VISITS = "parking_visit_registrations"
 
 
@@ -95,12 +97,29 @@ class User(UserMixin):
         return _parse_dt(self._row.get("approved_at"))
 
     def check_password(self, raw):
+        # 소셜 전용 계정은 password_hash 가 비어 있다 → 로컬 로그인 불가
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, raw)
 
     @property
     def must_change_password(self):
         # 컬럼이 없으면(마이그레이션 전) None → False 로 안전 처리
         return bool(self._row.get("must_change_password"))
+
+    @property
+    def provider(self):
+        """계정이 만들어진 경로. local | kakao | google"""
+        return self._row.get("provider") or "local"
+
+    @property
+    def provider_uid(self):
+        return self._row.get("provider_uid")
+
+    @property
+    def has_password(self):
+        """로컬 로그인(아이디/비번)이 가능한 계정인지."""
+        return bool(self.password_hash)
 
     @property
     def is_admin(self):
@@ -159,6 +178,54 @@ def users_household_active(dong, ho):
         "status": "in.(pending,approved)",
     }
     return [User(r) for r in sb.fetch_rows(T_USERS, params)]
+
+
+HOUSEHOLD_OK = "ok"
+HOUSEHOLD_DUPLICATE = "duplicate"   # 같은 세대에 같은 이름이 이미 있음
+HOUSEHOLD_FULL = "full"             # 세대당 2계정 한도 초과
+
+
+def household_check(dong, ho, name):
+    """세대 가입 가능 여부 판정 → (상태, 기존계정|None).
+
+    duplicate 는 차단 사유가 아니라 "본인일 가능성"이다. 소셜 가입에서는
+    기존 계정에 소셜을 연결하도록 유도하는 분기로 쓴다.
+    """
+    household = users_household_active(dong, ho)
+    target = (name or "").strip()
+    for u in household:
+        if (u.name or "").strip() == target:
+            return HOUSEHOLD_DUPLICATE, u
+    if len(household) >= 2:
+        return HOUSEHOLD_FULL, None
+    return HOUSEHOLD_OK, None
+
+
+def users_get_by_provider(provider, provider_uid):
+    """소셜 계정(provider + 고유번호)에 연결된 계정."""
+    row = sb.fetch_one(T_USERS, {
+        "provider": f"eq.{provider}",
+        "provider_uid": f"eq.{provider_uid}",
+    })
+    return User(row) if row else None
+
+
+def users_link_provider(user_id, provider, provider_uid):
+    """기존 계정에 소셜 계정을 연결한다."""
+    return users_update(user_id, {
+        "provider": provider,
+        "provider_uid": str(provider_uid),
+        "linked_at": _utcnow_iso(),
+    })
+
+
+def make_social_username(provider, provider_uid):
+    """소셜 전용 계정의 username.
+
+    username 이 NOT NULL UNIQUE 라 값이 필요하다. 비밀번호가 없으므로
+    이 아이디로 로컬 로그인은 되지 않는다(check_password 가 False).
+    """
+    return f"{provider}_{provider_uid}"
 
 
 def _norm_phone(value):
@@ -256,7 +323,7 @@ class VisitRegistration:
 
     @property
     def user_name(self):
-        """PostgREST 임베드(parking_users(name))로 함께 조회된 신청자 이름."""
+        """PostgREST 임베드(forie_users(name))로 함께 조회된 신청자 이름."""
         u = self._row.get(T_USERS)
         if isinstance(u, dict):
             return u.get("name")

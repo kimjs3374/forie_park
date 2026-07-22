@@ -26,6 +26,12 @@ class Config:
     TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+    # 카카오 로그인 (REST API 키 + 클라이언트 시크릿)
+    # 시크릿은 카카오 콘솔에서 기본 활성화 상태로 발급된다. 켜져 있으면 토큰 요청에
+    # 반드시 함께 보내야 하며, 빠뜨리면 KOE010(Bad client credentials)이 난다.
+    KAKAO_REST_API_KEY = os.environ.get("KAKAO_REST_API_KEY", "")
+    KAKAO_CLIENT_SECRET = os.environ.get("KAKAO_CLIENT_SECRET", "")
+
     # 세션 쿠키 보안 (Cloudflare 뒤 HTTPS 전용)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")

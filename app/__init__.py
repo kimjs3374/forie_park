@@ -23,10 +23,12 @@ def create_app(config_class=Config):
     from .auth import auth_bp
     from .main import main_bp
     from .admin import admin_bp
+    from .oauth import oauth_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(oauth_bp)
 
     # 임시 비밀번호 로그인 시 비번 변경 강제 (변경 전까지 다른 페이지 차단)
     @app.before_request

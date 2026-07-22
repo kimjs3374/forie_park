@@ -6,7 +6,13 @@
     <div class="stack">
       <div>
         <h1 class="title">로그인</h1>
-        <p class="sub">아이디와 비밀번호를 입력하세요.</p>
+        <p class="sub">카카오로 간편하게 로그인하거나, 아이디와 비밀번호를 입력하세요.</p>
+      </div>
+      <a href="{{ url_for('oauth.kakao_start') }}" style="background:#FEE500; color:#191600; border:none; border-radius:14px; padding:16px; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; gap:8px; text-decoration:none;">
+        카카오로 시작하기
+      </a>
+      <div style="display:flex; align-items:center; gap:12px; color:var(--muted); font-size:.85rem;">
+        <span style="flex:1; height:1px; background:var(--line);"></span>또는<span style="flex:1; height:1px; background:var(--line);"></span>
       </div>
       <form method="post" class="stack">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

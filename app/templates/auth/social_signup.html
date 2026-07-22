@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}세대 확인{% endblock %}
+{% block content %}
+<div class="card-k">
+  <div class="stack">
+    <div>
+      <h1 class="title">세대 확인</h1>
+      <p class="sub">{{ provider_label }} 인증이 완료되었습니다.<br>
+        입주민 확인을 위해 <b>동/호수와 이름</b>을 입력해 주세요.</p>
+    </div>
+    <form method="post" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="field">
+        <label>이름</label>
+        <input type="text" name="name" value="{{ form.name or '' }}" required autofocus>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>동</label>
+          <input type="text" name="dong" value="{{ form.dong or '' }}" placeholder="101" inputmode="numeric" required>
+        </div>
+        <div class="field">
+          <label>호</label>
+          <input type="text" name="ho" value="{{ form.ho or '' }}" placeholder="1502" inputmode="numeric" required>
+        </div>
+      </div>
+      <div class="field">
+        <label>휴대전화</label>
+        <input type="tel" name="phone" value="{{ form.phone or '' }}" placeholder="010-0000-0000" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>개인정보 수집·이용 동의 (필수)</label>
+        <div style="border:2px solid var(--line); border-radius:14px; background:#f8fafc; padding:14px; font-size:.88rem; color:var(--muted); line-height:1.7; max-height:160px; overflow-y:auto;">
+          <b>· 수집 항목:</b> {{ provider_label }} 회원번호, 이름, 휴대전화번호, 동/호(세대정보)<br>
+          <b>· 수집·이용 목적:</b> 입주민 본인 확인, 방문차량 등록 서비스 제공 및 관리사무소 승인<br>
+          <b>· 보유·이용 기간:</b> 회원 탈퇴 또는 수집 목적 달성 시까지<br>
+          <b>· 동의 거부 권리:</b> 동의를 거부할 수 있으며, 이 경우 회원가입 및 서비스 이용이 제한됩니다.
+        </div>
+        <label style="display:flex; align-items:center; gap:10px; margin-top:12px; font-weight:700; cursor:pointer;">
+          <input type="checkbox" name="consent_agreed" value="1" {% if form.consent_agreed %}checked{% endif %}
+                 style="width:22px; height:22px; flex:0 0 auto;">
+          <span>위 개인정보 수집·이용에 동의합니다.</span>
+        </label>
+      </div>
+      <button class="btn-k btn-primary btn-lg">확인하고 가입</button>
+    </form>
+    <p class="sub" style="text-align:center; font-size:.85rem;">
+      입주민 명부와 일치하면 <b>바로 이용</b>할 수 있고,<br>
+      확인되지 않으면 관리사무소 승인 후 이용할 수 있습니다.
+    </p>
+    <div class="muted-link">
+      <a href="{{ url_for('auth.login') }}">← 로그인으로 돌아가기</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
