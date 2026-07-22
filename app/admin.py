@@ -24,31 +24,13 @@ def admin_required(f):
 @admin_bp.route("/")
 @admin_required
 def dashboard():
-    pending_count = models.users_count(status="pending")
-    resident_count = models.users_count(role="resident", status="approved")
+    # 계정·명부는 통합 관리(forie.kr/admin)의 몫이다. 여기서는 방문차량만 센다.
     visit_count = models.visits_count(status="active")
-    return render_template(
-        "admin/dashboard.html",
-        pending_count=pending_count,
-        resident_count=resident_count,
-        visit_count=visit_count,
-    )
+    return render_template("admin/dashboard.html", visit_count=visit_count)
 
 
-IDP_ADMIN = "https://forie.kr/admin"
-
-
-# ---- 계정·명부 관리는 IdP(forie.kr)로 이관되었다. 옛 주소만 넘겨준다. ----
-@admin_bp.route("/users")
-@admin_required
-def users():
-    return redirect(IDP_ADMIN + "/users")
-
-
-@admin_bp.route("/directory")
-@admin_required
-def directory():
-    return redirect(IDP_ADMIN + "/directory")
+# 계정·명부 관리는 통합 관리(forie.kr/admin)로 이관되었다.
+# 옛 주소를 여기 남겨두면 '이 앱에서도 되는 기능'처럼 보여 오히려 헷갈린다.
 
 
 def _parse_date(value):

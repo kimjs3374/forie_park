@@ -3,32 +3,14 @@
 {% block content %}
 <div class="section-title"><span>관리사무소</span></div>
 
-<div class="row2" style="grid-template-columns:1fr 1fr 1fr; margin-bottom:18px;">
-  <div class="card-k" style="text-align:center; padding:22px 10px;">
-    <div style="font-size:2rem; font-weight:800; color:var(--warn);">{{ pending_count }}</div>
-    <div class="sub" style="margin:0;">승인대기</div>
-  </div>
-  <div class="card-k" style="text-align:center; padding:22px 10px;">
-    <div style="font-size:2rem; font-weight:800;">{{ resident_count }}</div>
-    <div class="sub" style="margin:0;">입주민</div>
-  </div>
-  <div class="card-k" style="text-align:center; padding:22px 10px;">
-    <div style="font-size:2rem; font-weight:800; color:var(--primary);">{{ visit_count }}</div>
-    <div class="sub" style="margin:0;">방문등록</div>
-  </div>
+<div class="card-k" style="text-align:center; padding:22px 10px; margin-bottom:18px;">
+  <div style="font-size:2rem; font-weight:800; color:var(--primary);">{{ visit_count }}</div>
+  <div class="sub" style="margin:0;">진행중 방문차량</div>
 </div>
 
 <div class="stack">
-  <a href="https://forie.kr/admin/users" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
-    <span style="font-weight:700;">가입 승인 관리</span>
-    <span class="badge-k b-wait">{{ pending_count }}</span>
-  </a>
   <a href="{{ url_for('admin.visits') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
     <span style="font-weight:700;">전체 방문차량 등록 내역</span>
-    <span style="color:var(--muted);">→</span>
-  </a>
-  <a href="https://forie.kr/admin/directory" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
-    <span style="font-weight:700;">입주민 명부 관리</span>
     <span style="color:var(--muted);">→</span>
   </a>
   <a href="{{ url_for('admin.popups') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
