@@ -25,6 +25,7 @@
 from urllib.parse import quote
 
 from flask import current_app, redirect, request
+from flask_login import current_user
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 SSO_MODULE_VERSION = "1.0.0"
@@ -166,6 +167,44 @@ def init_sso(app, user_loader, issuer=False):
             except Exception:
                 current_app.logger.exception("SSO 쿠키 갱신 실패")
         return response
+
+    @app.errorhandler(403)
+    def _forbidden(_error):
+        """권한 부족 안내. 기본 403 페이지로는 무엇이 문제인지 알 수 없다."""
+        who = "로그인하지 않음"
+        if getattr(current_user, "is_authenticated", False):
+            who = "%s (%s)" % (current_user.name,
+                               getattr(current_user, "role_label", None) or "입주민")
+        html = (
+            '<!doctype html><html lang="ko"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>접근 권한 없음</title><style>'
+            'body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Segoe UI",sans-serif;'
+            'margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;'
+            'padding:24px;background:#eef2fb;color:#161c28}'
+            '@media(prefers-color-scheme:dark){body{background:#0b101b;color:#e9edf6}'
+            '.box{background:#1a2131 !important;border-color:rgba(255,255,255,.08) !important}}'
+            '.box{max-width:420px;width:100%;background:#fff;border:1px solid rgba(255,255,255,.9);'
+            'border-radius:22px;padding:34px 28px;text-align:center;'
+            'box-shadow:0 10px 30px rgba(30,42,70,.10)}'
+            '.ico{font-size:44px;margin-bottom:14px}'
+            'h1{font-size:20px;font-weight:800;margin:0 0 10px}'
+            'p{color:#5c6579;font-size:14.5px;line-height:1.65;margin:0 0 8px}'
+            '.who{display:inline-block;margin:14px 0 22px;padding:8px 14px;border-radius:999px;'
+            'background:rgba(37,99,235,.10);color:#2563eb;font-size:13px;font-weight:700}'
+            '.btn{display:block;padding:14px;border-radius:14px;text-decoration:none;'
+            'font-weight:800;font-size:15px;margin-top:9px}'
+            '.p{background:#2563eb;color:#fff}.g{background:rgba(100,116,139,.14);color:inherit}'
+            '</style></head><body><div class="box">'
+            '<div class="ico">🔒</div>'
+            '<h1>접근 권한이 없습니다</h1>'
+            '<p>이 화면은 <b>관리사무소 계정</b>으로만 볼 수 있습니다.</p>'
+            '<div class="who">현재 로그인: ' + who + '</div>'
+            '<a class="btn p" href="' + LOGOUT_URL + '">다른 계정으로 로그인</a>'
+            '<a class="btn g" href="https://forie.kr/">홈으로</a>'
+            '</div></body></html>'
+        )
+        return html, 403
 
     @login_manager.unauthorized_handler
     def _unauthorized():
