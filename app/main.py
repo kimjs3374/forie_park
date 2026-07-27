@@ -19,6 +19,13 @@ MAX_VISIT_HOURS = 72
 CAR_NUMBER_RE = re.compile(r"^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$")
 
 
+def _same_household(reg, user):
+    """등록이 이 사용자의 세대(동/호) 것인지. 계정 id 가 아니라 동/호로 판정한다."""
+    return (str(reg.dong or "").strip() == str(getattr(user, "dong", "") or "").strip()
+            and str(reg.ho or "").strip() == str(getattr(user, "ho", "") or "").strip()
+            and bool(str(reg.dong or "").strip()))
+
+
 def _parse_dt(value):
     """HTML datetime-local 입력값(YYYY-MM-DDTHH:MM)을 datetime으로 변환."""
     if not value:
@@ -32,7 +39,7 @@ def _parse_dt(value):
 @main_bp.route("/")
 @login_required
 def index():
-    regs = models.visits_by_user(current_user.id)
+    regs = models.visits_by_household(current_user.dong, current_user.ho)
     now_kst = (datetime.now(timezone.utc) + timedelta(hours=9)).replace(tzinfo=None)
     overdue = [r for r in regs if r.status == "active" and r.visit_state == "entered"
                and r.exit_time and r.exit_time.replace(tzinfo=None) < now_kst]
@@ -49,7 +56,7 @@ def index():
 @main_bp.route("/visits")
 @login_required
 def visit_list():
-    regs = models.visits_by_user(current_user.id)
+    regs = models.visits_by_household(current_user.dong, current_user.ho)
     logs_map = models.visit_logs_by_regs([r.id for r in regs])
     now_utc = datetime.now(timezone.utc)
     summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in regs}
@@ -64,6 +71,7 @@ def visit_new():
         car_number = (request.form.get("car_number") or "").strip().replace(" ", "")
         visitor_phone = (request.form.get("visitor_phone") or "").strip()
         visit_reason = (request.form.get("visit_reason") or "").strip()
+        car_type = (request.form.get("car_type") or "").strip()
         entry_time = _parse_dt(request.form.get("entry_time"))
         exit_time = _parse_dt(request.form.get("exit_time"))
 
@@ -76,6 +84,8 @@ def visit_new():
             errors.append("방문사유를 입력하세요.")
         elif len(visit_reason) > 100:
             errors.append("방문사유는 100자 이내로 입력하세요.")
+        if car_type and len(car_type) > 30:
+            errors.append("차량종류는 30자 이내로 입력하세요.")
         if not visitor_phone:
             errors.append("방문자 연락처를 입력하세요.")
         else:
@@ -113,6 +123,7 @@ def visit_new():
             "car_number": car_number,
             "visitor_phone": visitor_phone or None,
             "visit_reason": visit_reason,
+            "car_type": car_type or None,
             "entry_time": entry_time.isoformat(),
             "exit_time": exit_time.isoformat(),
             "status": "active",
@@ -140,7 +151,9 @@ def visit_cancel(reg_id):
     reg = models.visits_get(reg_id)
     if not reg:
         abort(404)
-    if reg.user_id != current_user.id:
+    # 등록은 세대 단위로 쓰는 것이라 배우자가 넣은 차량도 취소할 수 있어야 한다.
+    # 판정 기준은 계정 id 가 아니라 그 등록에 찍힌 동/호다.
+    if not _same_household(reg, current_user):
         abort(403)
 
     if reg.status == "cancelled":

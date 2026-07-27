@@ -314,6 +314,10 @@ class VisitRegistration:
         return self._row.get("car_number")
 
     @property
+    def car_type(self):
+        return self._row.get("car_type")
+
+    @property
     def entry_time(self):
         return _parse_dt(self._row.get("entry_time"))
 
@@ -364,11 +368,15 @@ class VisitRegistration:
 
     @property
     def user_name(self):
-        """PostgREST 임베드(forie_users(name))로 함께 조회된 신청자 이름."""
+        """등록한 사람 이름.
+
+        관리자 목록은 PostgREST 임베드(forie_users(name))로 채우고, 세대 목록
+        (visits_by_household)은 id→이름을 따로 조회해 user_name 으로 넣어 준다.
+        """
         u = self._row.get(T_USERS)
         if isinstance(u, dict):
             return u.get("name")
-        return None
+        return self._row.get("user_name") or None
 
     @property
     def duration_minutes(self):
@@ -383,6 +391,32 @@ def visits_by_user(user_id, limit=None):
     if limit:
         params["limit"] = str(limit)
     return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
+
+
+def visits_by_household(dong, ho, limit=None):
+    """같은 세대(동/호)의 방문차량 등록.
+
+    부부가 각각 가입한 세대가 있어 한쪽이 등록한 차량이 다른 쪽에서는 안 보였다.
+    등록 시점의 동/호가 행에 그대로 남아 있으므로 그것으로 묶는다.
+    누가 등록했는지 구분할 수 있도록 등록자 이름을 붙여 준다.
+    """
+    dong, ho = str(dong or "").strip(), str(ho or "").strip()
+    if not (dong and ho):
+        return []
+    params = {"dong": f"eq.{dong}", "ho": f"eq.{ho}", "order": "created_at.desc"}
+    if limit:
+        params["limit"] = str(limit)
+    rows = sb.fetch_rows(T_VISITS, params)
+
+    user_ids = {r.get("user_id") for r in rows if r.get("user_id") is not None}
+    names = {}
+    if user_ids:
+        id_list = ",".join(str(int(i)) for i in user_ids)
+        names = {u["id"]: u.get("name") for u in sb.fetch_rows(
+            T_USERS, {"select": "id,name", "id": f"in.({id_list})"})}
+    for row in rows:
+        row["user_name"] = names.get(row.get("user_id")) or ""
+    return [VisitRegistration(r) for r in rows]
 
 
 def visits_get(reg_id):

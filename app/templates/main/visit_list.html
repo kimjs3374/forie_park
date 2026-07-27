@@ -36,6 +36,8 @@
     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
       <div style="min-width:0;">
         <div class="plate">{{ r.car_number }}</div>
+        {# 세대 공유 목록이라 누가 등록했는지 밝힌다. #}
+        {% if r.user_name %}<div class="time" style="margin-bottom:.15rem;">{{ r.user_name }} 등록</div>{% endif %}
         {% set sm = summaries.get(r.id) %}
         <div class="time" data-inout
              data-in="{{ dispmap.get(r.id, ('',''))[0] }}"
