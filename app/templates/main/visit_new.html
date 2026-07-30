@@ -86,6 +86,28 @@
         </datalist>
       </div>
 
+      <!-- 차량종류(선택) -->
+      <div class="field">
+        <label>차량종류 <span style="color:var(--muted); font-weight:600;">(선택)</span></label>
+        <input type="text" name="car_type" id="carTypeInput" value="{{ form.car_type or '' }}"
+               placeholder="예) 아반떼, 카니발, 포터" maxlength="30"
+               autocomplete="off" list="carTypeList" style="font-size:1.15rem;">
+        <datalist id="carTypeList">
+          <option value="아반떼"></option>
+          <option value="쏘나타"></option>
+          <option value="그랜저"></option>
+          <option value="K5"></option>
+          <option value="카니발"></option>
+          <option value="쏘렌토"></option>
+          <option value="스포티지"></option>
+          <option value="투싼"></option>
+          <option value="모닝"></option>
+          <option value="레이"></option>
+          <option value="포터"></option>
+          <option value="봉고"></option>
+        </datalist>
+      </div>
+
       <!-- 입차 날짜: 오늘/내일/모레 + 년/월/일 드롭다운 -->
       <div class="field">
         <label>입차 날짜</label>
