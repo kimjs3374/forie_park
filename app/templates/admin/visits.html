@@ -5,6 +5,12 @@
 
 <div class="card-k" style="padding:18px; margin-bottom:16px;">
   <form method="get" action="{{ url_for('admin.visits') }}" class="stack" style="gap:12px;">
+    <div class="field">
+      <label style="font-size:.9rem;">차량번호</label>
+      <input type="search" name="car" value="{{ car }}" inputmode="search"
+             placeholder="예: 842모1412 · 1412 (일부만 입력해도 됩니다)"
+             style="height:52px; font-size:1.05rem;">
+    </div>
     <div class="row2">
       <div class="field">
         <label style="font-size:.9rem;">시작일(입차)</label>
@@ -18,16 +24,28 @@
     <div class="row2">
       <button class="btn-k btn-ghost" style="min-height:52px; font-size:1.05rem;">조회</button>
       <a class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem; text-decoration:none;"
-         href="{{ url_for('admin.export_workbook', **{'from': date_from, 'to': date_to}) }}">📊 전체 엑셀</a>
+         href="{{ url_for('admin.export_workbook', **{'from': date_from, 'to': date_to, 'car': car}) }}">📊 전체 엑셀</a>
     </div>
     <div class="row2">
       <a class="btn-k btn-ghost" style="min-height:48px; font-size:.98rem; text-decoration:none;"
-         href="{{ url_for('admin.export_visits', **{'from': date_from, 'to': date_to}) }}">⬇ 등록 CSV</a>
+         href="{{ url_for('admin.export_visits', **{'from': date_from, 'to': date_to, 'car': car}) }}">⬇ 등록 CSV</a>
       <a class="btn-k btn-ghost" style="min-height:48px; font-size:.98rem; text-decoration:none;"
-         href="{{ url_for('admin.export_logs', **{'from': date_from, 'to': date_to}) }}">⬇ 입출차로그 CSV</a>
+         href="{{ url_for('admin.export_logs', **{'from': date_from, 'to': date_to, 'car': car}) }}">⬇ 입출차로그 CSV</a>
     </div>
   </form>
 </div>
+
+{% if car_norm %}
+<div class="card-k" style="padding:12px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+  <div style="font-size:.95rem; min-width:0;">
+    <b class="plate">{{ car_norm }}</b> 검색 결과
+    <b style="color:var(--primary);">{{ registrations|length }}건</b>
+    {% if date_from or date_to %}<span style="color:var(--muted);"> · 기간 지정됨</span>{% endif %}
+  </div>
+  <a href="{{ url_for('admin.visits', **{'from': date_from, 'to': date_to}) }}"
+     style="font-size:.9rem; color:var(--muted); text-decoration:none; white-space:nowrap;">✕ 검색 해제</a>
+</div>
+{% endif %}
 
 {% if truncated %}
 <div class="card-k" style="padding:12px 16px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">

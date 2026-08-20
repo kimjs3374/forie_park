@@ -55,8 +55,9 @@ def _parse_date(value):
 def visits():
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
+    car = request.args.get("car", "")
     limit = 500
-    regs = models.visits_filter(date_from, date_to, limit=limit, with_user=True)
+    regs = models.visits_filter(date_from, date_to, limit=limit, with_user=True, car=car)
     logs_map = models.visit_logs_by_regs([r.id for r in regs])
     now_utc = datetime.now(timezone.utc)
     summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in regs}
@@ -69,6 +70,8 @@ def visits():
         truncated=len(regs) >= limit,   # 잘렸으면 내려받기를 안내한다
         date_from=request.args.get("from", ""),
         date_to=request.args.get("to", ""),
+        car=car,
+        car_norm=models.normalize_car_query(car),
     )
 
 
@@ -156,10 +159,11 @@ def _log_rows(logs, regs):
 @admin_bp.route("/visits/export")
 @admin_required
 def export_visits():
-    """방문등록 내역 CSV. 기간을 비우면 전체 기간."""
+    """방문등록 내역 CSV. 기간·차량번호를 비우면 전체."""
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
-    regs = models.visits_filter_all(date_from, date_to, with_user=True)
+    car = request.args.get("car", "")
+    regs = models.visits_filter_all(date_from, date_to, with_user=True, car=car)
     return _csv_response(_visit_rows(regs), _VISIT_HEADER, "visit_registrations")
 
 
@@ -169,10 +173,11 @@ def export_logs():
     """입출차 로그 CSV — 기간 내 이벤트 전량(1000행 상한 없음)."""
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
-    logs = models.visit_logs_filter(date_from, date_to)
+    car = request.args.get("car", "")
+    logs = models.visit_logs_filter(date_from, date_to, car=car)
     # 로그의 세대·신청자를 채우려면 등록건이 필요하다. 기간 밖 등록에 달린
-    # 로그도 있을 수 있어 등록은 기간 제한 없이 전량 가져온다.
-    regs = models.visits_filter_all(with_user=True)
+    # 로그도 있을 수 있어 등록은 기간 제한 없이 전량 가져온다(차량 필터는 유지).
+    regs = models.visits_filter_all(with_user=True, car=car)
     return _csv_response(_log_rows(logs, regs), _LOG_HEADER, "visit_logs")
 
 
@@ -186,9 +191,11 @@ def export_workbook():
 
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
-    regs = models.visits_filter_all(date_from, date_to, with_user=True)
-    logs = models.visit_logs_filter(date_from, date_to)
+    car = request.args.get("car", "")
+    regs = models.visits_filter_all(date_from, date_to, with_user=True, car=car)
+    logs = models.visit_logs_filter(date_from, date_to, car=car)
     all_regs = models.visits_filter_all(with_user=True)
+    # 의심세대는 세대 단위 분석이라 차량 검색어를 걸면 뜻이 흐려진다. 기간만 적용한다.
     report = analytics.scan(date_from, date_to)
 
     wb = Workbook()
@@ -237,10 +244,12 @@ def export_workbook():
         ("항목", "값"),
         ("추출일시(KST)", _fmt(now_kst)),
         ("조회 기간", period),
-        ("방문등록", "%d건 (유효 %d건)" % (st["regs"], st["active"])),
-        ("입출차 로그", "%d건" % st["logs"]),
+        ("차량번호 검색", (models.normalize_car_query(car) + " (부분 일치)") if car else "전체"),
+        # 방문등록·입출차로그 시트는 차량 검색까지 반영된 실제 행수를 적는다.
+        ("방문등록", "%d건 (유효 %d건)" % (len(regs), sum(1 for r in regs if r.status != "cancelled"))),
+        ("입출차 로그", "%d건" % len(logs)),
         ("이용 세대수", "%d세대" % st["households"]),
-        ("의심 세대", "%d세대 (위험도 높음 %d)" % (st["flagged"], st["high"])),
+        ("의심 세대", "%d세대 (위험도 높음 %d) — 기간 전체 기준" % (st["flagged"], st["high"])),
         ("데이터 이상", "%d건" % len(report["anomalies"])),
         ("", ""),
         ("시간대 표기", "실제 입/출차 및 로그는 KST(UTC+9). 신청 입/출차일은 저장값 그대로(일 단위)."),

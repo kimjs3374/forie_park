@@ -445,16 +445,38 @@ def visits_count(status=None):
     return sb.count_rows(T_VISITS, params)
 
 
-def visits_filter(date_from=None, date_to=None, limit=None, with_user=False):
-    """entry_time 기준 기간 필터(내림차순). with_user=True 면 신청자 이름 임베드."""
-    from datetime import timedelta
+def normalize_car_query(value):
+    """차량번호 검색어 정리 — 한글·영숫자만 남긴다.
 
-    params = [("select", f"*,{T_USERS}(name)" if with_user else "*"),
+    '842모 1412', '842모-1412' 처럼 띄어쓰기·기호를 섞어 넣어도 찾히게 하고,
+    PostgREST 필터에서 뜻을 갖는 문자(*, %, 쉼표, 괄호 등)를 함께 털어내
+    검색어가 질의 문법을 건드리지 못하게 한다.
+    """
+    if not value:
+        return ""
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", str(value))
+
+
+def _visits_params(date_from=None, date_to=None, car=None, with_user=False, embed="name"):
+    params = [("select", f"*,{T_USERS}({embed})" if with_user else "*"),
               ("order", "entry_time.desc")]
     if date_from:
         params.append(("entry_time", f"gte.{date_from.isoformat()}"))
     if date_to:
         params.append(("entry_time", f"lt.{(date_to + timedelta(days=1)).isoformat()}"))
+    car = normalize_car_query(car)
+    if car:
+        # 부분 일치. 뒷 4자리만 입력해도 찾히게 앞뒤로 열어 둔다.
+        params.append(("car_number", f"ilike.*{car}*"))
+    return params
+
+
+def visits_filter(date_from=None, date_to=None, limit=None, with_user=False, car=None):
+    """entry_time 기준 기간 필터(내림차순). with_user=True 면 신청자 이름 임베드.
+
+    car 를 주면 차량번호 부분 일치로 좁힌다.
+    """
+    params = _visits_params(date_from, date_to, car, with_user)
     if limit:
         params.append(("limit", str(limit)))
     return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
@@ -543,11 +565,12 @@ def visit_logs_create(data):
     return VisitLog(sb.insert_row(T_LOGS, data))
 
 
-def visit_logs_filter(date_from=None, date_to=None):
+def visit_logs_filter(date_from=None, date_to=None, car=None):
     """기간(발생시각 KST 기준) 내 입출차 로그 전량을 시간순으로.
 
     event_time 은 UTC 로 저장돼 있으므로 KST 하루 경계를 UTC 로 되돌려 거른다.
     내보내기·통계용이라 1000행 상한에 걸리지 않게 fetch_all_rows 를 쓴다.
+    car 를 주면 차량번호 부분 일치로 좁힌다.
     """
     params = [("select", "*"), ("order", "event_time.asc,id.asc")]
     if date_from:
@@ -555,20 +578,18 @@ def visit_logs_filter(date_from=None, date_to=None):
     if date_to:
         end = date_to + timedelta(days=1) - timedelta(hours=9)
         params.append(("event_time", f"lt.{end.isoformat()}"))
+    car = normalize_car_query(car)
+    if car:
+        params.append(("car_number", f"ilike.*{car}*"))
     try:
         return [VisitLog(r) for r in sb.fetch_all_rows(T_LOGS, params)]
     except Exception:
         return []
 
 
-def visits_filter_all(date_from=None, date_to=None, with_user=False):
+def visits_filter_all(date_from=None, date_to=None, with_user=False, car=None):
     """visits_filter 의 전량판(1000행 상한 없음). 내보내기·통계 전용."""
-    params = [("select", f"*,{T_USERS}(name,phone)" if with_user else "*"),
-              ("order", "entry_time.desc")]
-    if date_from:
-        params.append(("entry_time", f"gte.{date_from.isoformat()}"))
-    if date_to:
-        params.append(("entry_time", f"lt.{(date_to + timedelta(days=1)).isoformat()}"))
+    params = _visits_params(date_from, date_to, car, with_user, embed="name,phone")
     return [VisitRegistration(r) for r in sb.fetch_all_rows(T_VISITS, params)]
 
 
