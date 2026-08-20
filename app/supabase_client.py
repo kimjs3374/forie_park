@@ -30,6 +30,26 @@ def fetch_rows(table, params=None):
     return resp.json()
 
 
+def fetch_all_rows(table, params=None, page=1000):
+    """PostgREST 기본 상한(1000행)을 넘겨 전량을 받아온다.
+
+    fetch_rows 는 한 번만 요청하므로 행이 상한을 넘으면 조용히 잘린다.
+    내보내기·통계처럼 '전부' 가 필요한 곳은 이 함수를 쓴다.
+    params 에 limit/offset 이 이미 있으면 그 뜻을 존중해 한 번만 조회한다.
+    """
+    base = list(params.items()) if isinstance(params, dict) else list(params or [])
+    if any(k in ("limit", "offset") for k, _ in base):
+        return fetch_rows(table, base)
+    out, offset = [], 0
+    while True:
+        p = base + [("limit", str(page)), ("offset", str(offset))]
+        rows = fetch_rows(table, p)
+        out.extend(rows)
+        if len(rows) < page:
+            return out
+        offset += page
+
+
 def fetch_one(table, params=None):
     p = dict(params or {}) if isinstance(params, dict) else list(params or [])
     if isinstance(p, dict):

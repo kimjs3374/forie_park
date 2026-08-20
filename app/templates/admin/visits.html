@@ -18,10 +18,24 @@
     <div class="row2">
       <button class="btn-k btn-ghost" style="min-height:52px; font-size:1.05rem;">조회</button>
       <a class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem; text-decoration:none;"
-         href="{{ url_for('admin.export_visits', **{'from': date_from, 'to': date_to}) }}">⬇ CSV 다운로드</a>
+         href="{{ url_for('admin.export_workbook', **{'from': date_from, 'to': date_to}) }}">📊 전체 엑셀</a>
+    </div>
+    <div class="row2">
+      <a class="btn-k btn-ghost" style="min-height:48px; font-size:.98rem; text-decoration:none;"
+         href="{{ url_for('admin.export_visits', **{'from': date_from, 'to': date_to}) }}">⬇ 등록 CSV</a>
+      <a class="btn-k btn-ghost" style="min-height:48px; font-size:.98rem; text-decoration:none;"
+         href="{{ url_for('admin.export_logs', **{'from': date_from, 'to': date_to}) }}">⬇ 입출차로그 CSV</a>
     </div>
   </form>
 </div>
+
+{% if truncated %}
+<div class="card-k" style="padding:12px 16px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">
+  <div style="font-size:.9rem; color:#78350f;">
+    화면에는 최근 <b>{{ registrations|length }}건</b>만 표시됩니다. 기간 전체는 위 내려받기를 이용하세요.
+  </div>
+</div>
+{% endif %}
 
 <div class="stack">
 {% if registrations %}

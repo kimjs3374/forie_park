@@ -13,9 +13,31 @@
     <span style="font-weight:700;">전체 방문차량 등록 내역</span>
     <span style="color:var(--muted);">→</span>
   </a>
+  <a href="{{ url_for('admin.suspects') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">부정사용 의심 세대
+      {% if suspect_count %}<span class="badge-k b-cancel" style="margin-left:6px;">{{ suspect_count }}</span>{% endif %}
+    </span>
+    <span style="color:var(--muted);">→</span>
+  </a>
   <a href="{{ url_for('admin.popups') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
     <span style="font-weight:700;">팝업(공지) 관리</span>
     <span style="color:var(--muted);">→</span>
+  </a>
+</div>
+
+<div class="section-title" style="margin-top:22px;"><span>내려받기</span></div>
+<div class="stack">
+  <a href="{{ url_for('admin.export_workbook') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">📊 전체 엑셀 <span style="color:var(--muted); font-weight:600; font-size:.88rem;">등록·로그·의심세대 통합</span></span>
+    <span style="color:var(--muted);">⬇</span>
+  </a>
+  <a href="{{ url_for('admin.export_logs') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">📋 입출차 로그 CSV <span style="color:var(--muted); font-weight:600; font-size:.88rem;">전량</span></span>
+    <span style="color:var(--muted);">⬇</span>
+  </a>
+  <a href="{{ url_for('admin.export_visits') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">🚗 방문등록 CSV <span style="color:var(--muted); font-weight:600; font-size:.88rem;">전량</span></span>
+    <span style="color:var(--muted);">⬇</span>
   </a>
 </div>
 {% endblock %}

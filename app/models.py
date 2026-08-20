@@ -543,6 +543,35 @@ def visit_logs_create(data):
     return VisitLog(sb.insert_row(T_LOGS, data))
 
 
+def visit_logs_filter(date_from=None, date_to=None):
+    """기간(발생시각 KST 기준) 내 입출차 로그 전량을 시간순으로.
+
+    event_time 은 UTC 로 저장돼 있으므로 KST 하루 경계를 UTC 로 되돌려 거른다.
+    내보내기·통계용이라 1000행 상한에 걸리지 않게 fetch_all_rows 를 쓴다.
+    """
+    params = [("select", "*"), ("order", "event_time.asc,id.asc")]
+    if date_from:
+        params.append(("event_time", f"gte.{(date_from - timedelta(hours=9)).isoformat()}"))
+    if date_to:
+        end = date_to + timedelta(days=1) - timedelta(hours=9)
+        params.append(("event_time", f"lt.{end.isoformat()}"))
+    try:
+        return [VisitLog(r) for r in sb.fetch_all_rows(T_LOGS, params)]
+    except Exception:
+        return []
+
+
+def visits_filter_all(date_from=None, date_to=None, with_user=False):
+    """visits_filter 의 전량판(1000행 상한 없음). 내보내기·통계 전용."""
+    params = [("select", f"*,{T_USERS}(name,phone)" if with_user else "*"),
+              ("order", "entry_time.desc")]
+    if date_from:
+        params.append(("entry_time", f"gte.{date_from.isoformat()}"))
+    if date_to:
+        params.append(("entry_time", f"lt.{(date_to + timedelta(days=1)).isoformat()}"))
+    return [VisitRegistration(r) for r in sb.fetch_all_rows(T_VISITS, params)]
+
+
 def summarize_logs(logs, now=None):
     """입/출 이벤트 리스트 -> 화면용 요약.
 

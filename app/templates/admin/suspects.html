@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}관리 - 부정사용 의심 세대{% endblock %}
+{% block content %}
+<div class="section-title"><span>부정사용 의심 세대</span></div>
+
+<div class="card-k" style="padding:14px 16px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">
+  <div style="font-size:.9rem; line-height:1.55; color:#78350f;">
+    방문차량은 <b>단순 방문 전용</b>입니다. 같은 차량을 반복·연속 등록하거나 밤을 넘겨 상주하는 흐름을
+    네 축(반복·연속·야간·체류)으로 계량해 점수를 매겼습니다.
+    <b>점수는 살펴볼 순서일 뿐 위반 판정이 아닙니다</b> — 장기 간병·가족 돌봄 등 정당한 사정이 있을 수 있으니
+    조치 전에 소명을 받으세요.
+  </div>
+</div>
+
+<div class="card-k" style="padding:18px; margin-bottom:16px;">
+  <form method="get" action="{{ url_for('admin.suspects') }}" class="stack" style="gap:12px;">
+    <div class="row2">
+      <div class="field">
+        <label style="font-size:.9rem;">시작일(입차)</label>
+        <input type="date" name="from" value="{{ date_from }}" style="height:52px; font-size:1.05rem;">
+      </div>
+      <div class="field">
+        <label style="font-size:.9rem;">종료일(입차)</label>
+        <input type="date" name="to" value="{{ date_to }}" style="height:52px; font-size:1.05rem;">
+      </div>
+    </div>
+    <div class="row2">
+      <button class="btn-k btn-ghost" style="min-height:52px; font-size:1.05rem;">조회</button>
+      <a class="btn-k btn-primary" style="min-height:52px; font-size:1.05rem; text-decoration:none;"
+         href="{{ url_for('admin.export_suspects', **{'from': date_from, 'to': date_to}) }}">⬇ CSV 다운로드</a>
+    </div>
+  </form>
+</div>
+
+<div class="card-k" style="padding:16px; margin-bottom:16px;">
+  <div style="display:flex; flex-wrap:wrap; gap:18px; text-align:center; justify-content:space-around;">
+    <div><div style="font-size:1.6rem; font-weight:800; color:var(--primary);">{{ stats.flagged }}</div>
+         <div class="sub" style="margin:0;">의심 세대</div></div>
+    <div><div style="font-size:1.6rem; font-weight:800; color:#b91c1c;">{{ stats.high }}</div>
+         <div class="sub" style="margin:0;">위험도 높음</div></div>
+    <div><div style="font-size:1.6rem; font-weight:800;">{{ stats.households }}</div>
+         <div class="sub" style="margin:0;">이용 세대</div></div>
+    <div><div style="font-size:1.6rem; font-weight:800;">{{ stats.active }}</div>
+         <div class="sub" style="margin:0;">유효 등록</div></div>
+    <div><div style="font-size:1.6rem; font-weight:800;">{{ stats.logs }}</div>
+         <div class="sub" style="margin:0;">입출차 로그</div></div>
+  </div>
+</div>
+
+{% if stats.shared_cars %}
+<div class="card-k" style="padding:14px 16px; margin-bottom:16px; background:#fef2f2; border-color:#fecaca;">
+  <div style="font-weight:800; color:#b91c1c; margin-bottom:8px;">⚠ 여러 세대가 함께 등록한 차량</div>
+  {% for c in stats.shared_cars %}
+  <div style="font-size:.92rem; padding:3px 0;"><span class="plate">{{ c.car_number }}</span> — {{ c.households }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="stack">
+{% if households %}
+  {% for h in households %}
+  <div class="item" style="flex-direction:column; align-items:stretch;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+      <div style="min-width:0;">
+        <div style="font-weight:800; font-size:1.1rem;">
+          {{ loop.index }}. {{ h.household }}
+          <span style="color:var(--muted); font-weight:600; font-size:.92rem;">{{ h.users }}</span>
+        </div>
+        <div class="sub" style="margin:4px 0 0;">
+          주요차량 <span class="plate">{{ h.top_car }}</span>
+          {% if h.cars > 1 %}<span style="color:var(--muted);"> 외 {{ h.cars - 1 }}종</span>{% endif %}
+          {% if h.period %}<span style="color:var(--muted);"> · {{ h.period }}</span>{% endif %}
+        </div>
+      </div>
+      <div style="text-align:right; white-space:nowrap;">
+        <span class="badge-k {{ h.level_css }}">{{ h.level }}</span>
+        <div style="font-size:1.3rem; font-weight:800; color:var(--primary); margin-top:4px;">{{ h.score }}</div>
+      </div>
+    </div>
+
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+      <span class="badge-k b-wait">등록 {{ h.regs }}건</span>
+      <span class="badge-k b-wait">이용 {{ h.days }}일</span>
+      {% if h.repeat > 2 %}<span class="badge-k b-cancel">동일차량 {{ h.repeat }}일</span>{% endif %}
+      {% if h.run > 2 %}<span class="badge-k b-cancel">{{ h.run }}일 연속</span>{% endif %}
+      {% if h.night %}<span class="badge-k b-cancel">야간 {{ h.night }}회</span>{% endif %}
+      <span class="badge-k b-ok">누적 {{ h.stay_hours }}시간</span>
+      {% if h.no_in %}<span class="badge-k b-wait">미입차 {{ h.no_in }}건</span>{% endif %}
+    </div>
+
+    <div style="margin-top:10px; font-size:.9rem; line-height:1.5; color:var(--ink);">
+      <b style="color:var(--primary);">판단근거</b> · {{ h.why|join(' / ') }}
+    </div>
+    {% if h.reasons %}
+    <div style="margin-top:4px; font-size:.85rem; color:var(--muted);">신청사유: {{ h.reasons }}</div>
+    {% endif %}
+    <div style="margin-top:8px;">
+      <a href="{{ url_for('admin.visits', **{'from': date_from, 'to': date_to}) }}"
+         style="font-size:.88rem; color:var(--primary); font-weight:700; text-decoration:none;">등록 내역에서 확인 →</a>
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">의심되는 세대가 없습니다.</div>
+{% endif %}
+</div>
+
+{% if anomalies %}
+<div class="section-title" style="margin-top:22px;"><span>데이터 이상</span></div>
+<div class="card-k" style="padding:14px 16px;">
+  <div class="sub" style="margin:0 0 10px;">관제 연동 기록이 앞뒤가 맞지 않는 건입니다. 부정사용과는 별개로 확인이 필요합니다.</div>
+  {% for a in anomalies %}
+  <div style="padding:7px 0; border-top:1px solid var(--line, #e5e7eb); font-size:.9rem;">
+    <span class="badge-k b-cancel">{{ a.kind }}</span>
+    <span class="plate" style="margin-left:6px;">{{ a.car_number }}</span>
+    {% if a.household %}<span style="color:var(--muted);"> {{ a.household }} {{ a.user }}</span>{% endif %}
+    <div style="color:var(--muted); margin-top:3px;">{{ a.detail }}{% if a.reg_id %} (등록ID {{ a.reg_id }}){% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
