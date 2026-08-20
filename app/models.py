@@ -458,8 +458,11 @@ def normalize_car_query(value):
 
 
 def _visits_params(date_from=None, date_to=None, car=None, with_user=False, embed="name"):
+    # entry_time 은 날짜 단위(하루 종일)라 같은 값이 수두룩하다. id 를 동률 해소
+    # 기준으로 붙여 두지 않으면 offset 페이지네이션에서 순서가 흔들려 어떤 행은
+    # 두 번 나오고 어떤 행은 영영 안 나온다.
     params = [("select", f"*,{T_USERS}({embed})" if with_user else "*"),
-              ("order", "entry_time.desc")]
+              ("order", "entry_time.desc,id.desc")]
     if date_from:
         params.append(("entry_time", f"gte.{date_from.isoformat()}"))
     if date_to:
@@ -471,15 +474,23 @@ def _visits_params(date_from=None, date_to=None, car=None, with_user=False, embe
     return params
 
 
-def visits_filter(date_from=None, date_to=None, limit=None, with_user=False, car=None):
+def visits_filter(date_from=None, date_to=None, limit=None, with_user=False, car=None,
+                  offset=None):
     """entry_time 기준 기간 필터(내림차순). with_user=True 면 신청자 이름 임베드.
 
-    car 를 주면 차량번호 부분 일치로 좁힌다.
+    car 를 주면 차량번호 부분 일치로 좁히고, offset 은 이어 보기(무한 스크롤)용이다.
     """
     params = _visits_params(date_from, date_to, car, with_user)
     if limit:
         params.append(("limit", str(limit)))
+    if offset:
+        params.append(("offset", str(offset)))
     return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
+
+
+def visits_count_filter(date_from=None, date_to=None, car=None):
+    """목록과 같은 조건의 총 건수. 무한 스크롤이 어디서 멈출지 알아야 한다."""
+    return sb.count_rows(T_VISITS, _visits_params(date_from, date_to, car))
 
 
 # ---------------------------------------------------------- VisitLog(입출차 로그)

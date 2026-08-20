@@ -50,29 +50,57 @@ def _parse_date(value):
         return None
 
 
+# 한 번에 그리는 방문등록 카드 수. 카드마다 로그 타임라인이 붙어 무겁기에
+# 첫 화면을 가볍게 하고 나머지는 스크롤에 맞춰 이어 붙인다.
+PAGE_SIZE = 40
+
+
+def _visit_view(regs):
+    """카드 조각이 필요로 하는 부속 자료(로그 요약·표시용 입출차)."""
+    logs_map = models.visit_logs_by_regs([r.id for r in regs])
+    now_utc = datetime.now(timezone.utc)
+    return {
+        "summaries": {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc)
+                      for r in regs},
+        "dispmap": models.visit_dispmap(regs, now=now_utc, logs_map=logs_map),
+    }
+
+
 @admin_bp.route("/visits")
 @admin_required
 def visits():
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
     car = request.args.get("car", "")
-    limit = 500
-    regs = models.visits_filter(date_from, date_to, limit=limit, with_user=True, car=car)
-    logs_map = models.visit_logs_by_regs([r.id for r in regs])
-    now_utc = datetime.now(timezone.utc)
-    summaries = {r.id: models.summarize_logs(logs_map.get(r.id, []), now=now_utc) for r in regs}
-    dispmap = models.visit_dispmap(regs, now=now_utc, logs_map=logs_map)
+    regs = models.visits_filter(date_from, date_to, limit=PAGE_SIZE, with_user=True, car=car)
     return render_template(
         "admin/visits.html",
         registrations=regs,
-        summaries=summaries,
-        dispmap=dispmap,
-        truncated=len(regs) >= limit,   # 잘렸으면 내려받기를 안내한다
+        total=models.visits_count_filter(date_from, date_to, car),
         date_from=request.args.get("from", ""),
         date_to=request.args.get("to", ""),
         car=car,
         car_norm=models.normalize_car_query(car),
+        **_visit_view(regs),
     )
+
+
+@admin_bp.route("/visits/page")
+@admin_required
+def visits_page():
+    """무한 스크롤이 이어 붙일 카드 조각. 남은 게 없으면 빈 응답."""
+    date_from = _parse_date(request.args.get("from"))
+    date_to = _parse_date(request.args.get("to"))
+    car = request.args.get("car", "")
+    try:
+        offset = max(0, int(request.args.get("offset", 0)))
+    except (TypeError, ValueError):
+        offset = 0
+    regs = models.visits_filter(date_from, date_to, limit=PAGE_SIZE, with_user=True,
+                                car=car, offset=offset)
+    if not regs:
+        return ""
+    return render_template("admin/_visit_items.html", registrations=regs, **_visit_view(regs))
 
 
 # 등록 상태/연동 상태 한글 라벨

@@ -160,6 +160,8 @@
       });
     }
     tick(); setInterval(tick, 30000);
+    // 목록을 나중에 이어 붙이는 화면(무한 스크롤)이 새 카드를 바로 채울 수 있게 열어 둔다.
+    window.forieTick = tick;
   })();
   </script>
 </body>

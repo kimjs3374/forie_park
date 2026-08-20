@@ -39,7 +39,7 @@
 <div class="card-k" style="padding:12px 16px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
   <div style="font-size:.95rem; min-width:0;">
     <b class="plate">{{ car_norm }}</b> 검색 결과
-    <b style="color:var(--primary);">{{ registrations|length }}건</b>
+    <b style="color:var(--primary);">{{ total }}건</b>
     {% if date_from or date_to %}<span style="color:var(--muted);"> · 기간 지정됨</span>{% endif %}
   </div>
   <a href="{{ url_for('admin.visits', **{'from': date_from, 'to': date_to}) }}"
@@ -47,70 +47,108 @@
 </div>
 {% endif %}
 
-{% if truncated %}
-<div class="card-k" style="padding:12px 16px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">
-  <div style="font-size:.9rem; color:#78350f;">
-    화면에는 최근 <b>{{ registrations|length }}건</b>만 표시됩니다. 기간 전체는 위 내려받기를 이용하세요.
-  </div>
+<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+            margin:0 4px 10px; color:#cbd5e1; font-size:.88rem;">
+  <span>전체 <b style="color:#fff;">{{ total }}</b>건</span>
+  <span><b id="shownCount" style="color:#fff;">{{ registrations|length }}</b>건 표시</span>
+</div>
+{% if registrations %}
+<div class="stack" id="visitList">
+  {% include "admin/_visit_items.html" %}
+</div>
+
+{# 목록 끝을 감시해 다음 쪽을 이어 붙인다. 남은 게 없으면 서버가 빈 조각을 준다. #}
+<div id="visitMore" style="padding:16px 0; text-align:center; color:#cbd5e1; font-size:.9rem;"
+     data-next="{{ registrations|length }}"
+     data-total="{{ total }}"
+     data-url="{{ url_for('admin.visits_page', **{'from': date_from, 'to': date_to, 'car': car}) }}">
+  <span class="more-idle">스크롤하면 더 불러옵니다</span>
+  <span class="more-busy" style="display:none;">불러오는 중…</span>
+  <span class="more-done" style="display:none;">마지막입니다</span>
+  <button type="button" class="more-btn btn-k btn-ghost"
+          style="display:none; min-height:44px; font-size:.95rem; margin-top:8px;">더 보기</button>
+</div>
+{% else %}
+<div class="stack">
+  <div class="item" style="justify-content:center; color:var(--muted);">등록 내역이 없습니다.</div>
 </div>
 {% endif %}
 
-<div class="stack">
-{% if registrations %}
-  {% for r in registrations %}
-  <div class="item" style="flex-direction:column; align-items:stretch;">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-      <div style="min-width:0;">
-        <div class="plate" style="font-size:1.2rem;">{{ r.car_number }}
-          <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ r.dong }}동 {{ r.ho }}호{% if r.user_name %} · {{ r.user_name }}{% endif %}</span></div>
-        <div class="time" data-inout
-             data-in="{{ dispmap.get(r.id, ('',''))[0] }}"
-             data-out="{{ dispmap.get(r.id, ('',''))[1] }}"
-             data-state="{{ r.visit_state or '' }}">
-          예약 {{ r.entry_time.strftime('%Y-%m-%d %H:%M') }} ~ {{ r.exit_time.strftime('%Y-%m-%d %H:%M') }}<br>
-          입차 <span class="v-in">-</span><br>
-          출차 <span class="v-out">-</span><br>
-          주차시간 <span class="v-dur">-</span>
-        </div>
-      </div>
-      {% if r.status == 'cancelled' %}
-        <span class="badge-k b-cancel">취소</span>
-      {% elif r.visit_state == 'exited' %}
-        <span class="badge-k b-cancel">출차완료</span>
-      {% elif r.visit_state == 'entered' %}
-        <span class="badge-k b-ok">주차중</span>
-      {% elif r.nexpa_registered and not r.is_expired %}
-        <span class="badge-k b-ok">등록완료</span>
-      {% elif r.nexpa_registered and r.is_expired %}
-        <span class="badge-k b-cancel">만료</span>
-      {% else %}
-        <span class="badge-k b-wait">등록중</span>
-      {% endif %}
-    </div>
-    {% set sm = summaries.get(r.id) %}
-    {% if sm and sm.logs %}
-    <details style="margin-top:12px;">
-      <summary style="cursor:pointer; font-weight:700; color:var(--primary); list-style:none;">
-        📋 입출차 로그 {{ sm.logs|length }}건 · 총 주차 {{ sm.total_text }}{% if sm.parked_now %} · 주차중{% endif %}
-      </summary>
-      <div style="margin-top:10px; border-left:3px solid var(--line, #e5e7eb); padding-left:14px;">
-        {% for lg in sm.logs %}
-        <div style="display:flex; gap:10px; align-items:center; padding:5px 0;">
-          <span class="badge-k {{ 'b-ok' if lg.is_in else 'b-cancel' }}" style="min-width:46px; text-align:center;">{{ '입차' if lg.is_in else '출차' }}</span>
-          <span style="font-variant-numeric:tabular-nums; font-weight:600;">{{ lg.event_time_kst.strftime('%m/%d %H:%M') if lg.event_time_kst else '-' }}</span>
-          {% if lg.source and lg.source != 'nexpa' %}<span style="color:var(--muted); font-size:.82rem;">({{ lg.source }})</span>{% endif %}
-        </div>
-        {% endfor %}
-        {% if sm.parked_now %}<div style="color:var(--primary); font-weight:700; padding-top:6px;">▶ 현재 주차중</div>{% endif %}
-      </div>
-    </details>
-    {% else %}
-    <div style="margin-top:10px; color:var(--muted); font-size:.88rem;">입출차 기록 없음</div>
-    {% endif %}
-  </div>
-  {% endfor %}
-{% else %}
-  <div class="item" style="justify-content:center; color:var(--muted);">등록 내역이 없습니다.</div>
-{% endif %}
-</div>
+<script>
+(function(){
+  var more = document.getElementById('visitMore');
+  if(!more) return;
+  var list = document.getElementById('visitList');
+  var shown = document.getElementById('shownCount');
+  var idle = more.querySelector('.more-idle'),
+      busy = more.querySelector('.more-busy'),
+      done = more.querySelector('.more-done'),
+      btn  = more.querySelector('.more-btn');
+  var offset = parseInt(more.dataset.next, 10) || 0;
+  var total  = parseInt(more.dataset.total, 10) || 0;
+  var loading = false, finished = false;
+
+  function show(el){ [idle, busy, done].forEach(function(x){ x.style.display = (x === el) ? '' : 'none'; }); }
+
+  function finish(){
+    finished = true;
+    show(done);
+    btn.style.display = 'none';
+    if(observer) observer.disconnect();
+  }
+
+  function load(){
+    if(loading || finished) return;
+    if(offset >= total){ finish(); return; }
+    loading = true;
+    show(busy);
+    btn.style.display = 'none';
+    var url = more.dataset.url;
+    url += (url.indexOf('?') === -1 ? '?' : '&') + 'offset=' + offset;
+    fetch(url, {credentials: 'same-origin'})
+      .then(function(res){
+        if(!res.ok) throw new Error('HTTP ' + res.status);
+        return res.text();
+      })
+      .then(function(html){
+        var chunk = html.trim();
+        if(!chunk){ finish(); return; }
+        var wrap = document.createElement('div');
+        wrap.innerHTML = chunk;
+        var added = wrap.children.length;
+        while(wrap.firstChild) list.appendChild(wrap.firstChild);
+        offset += added;
+        if(shown) shown.textContent = offset;
+        // 새로 붙은 카드의 입/출차 시각은 공용 스크립트가 채운다(최대 30초 기다리지 않게 바로 호출).
+        if(window.forieTick) window.forieTick();
+        loading = false;
+        if(added === 0 || offset >= total) finish();
+        else { show(idle); if(observer) observer.observe(more); }
+      })
+      .catch(function(){
+        // 네트워크가 흔들려도 목록이 멈춘 채로 두지 않는다 — 직접 다시 시도할 길을 준다.
+        loading = false;
+        show(idle);
+        idle.textContent = '불러오지 못했습니다';
+        btn.style.display = '';
+      });
+  }
+
+  btn.addEventListener('click', function(){ idle.textContent = '스크롤하면 더 불러옵니다'; load(); });
+
+  var observer = null;
+  if('IntersectionObserver' in window){
+    observer = new IntersectionObserver(function(entries){
+      if(entries[0].isIntersecting) load();
+    }, {rootMargin: '400px'});
+    observer.observe(more);
+  } else {
+    // 옛 브라우저(관리사무소 PC가 오래된 경우)에서는 버튼으로 넘긴다.
+    show(idle);
+    btn.style.display = '';
+  }
+
+  if(offset >= total) finish();
+})();
+</script>
 {% endblock %}

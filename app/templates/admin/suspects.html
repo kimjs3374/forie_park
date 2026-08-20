@@ -1,10 +1,25 @@
 {% extends "base.html" %}
 {% block title %}관리 - 부정사용 의심 세대{% endblock %}
 {% block content %}
+<style>
+  /* 접이식 설명 — 기본 삼각형을 지우고 직접 그린 화살표만 돌린다. */
+  details > summary::-webkit-details-marker{ display:none; }
+  details > summary{ user-select:none; }
+  details > summary:hover{ background:rgba(0,0,0,.02); }
+  .chev{ display:inline-block; transition:transform .15s ease; }
+  details[open] > summary .chev{ transform:rotate(180deg); }
+</style>
 <div class="section-title"><span>부정사용 의심 세대</span></div>
 
-<div class="card-k" style="padding:16px; margin-bottom:14px;">
-  <div style="font-weight:800; font-size:1.02rem; margin-bottom:8px;">점수는 이렇게 매깁니다</div>
+<div class="card-k" style="padding:0; margin-bottom:14px; overflow:hidden;">
+  <details>
+    <summary style="cursor:pointer; list-style:none; padding:15px 16px; display:flex;
+                    justify-content:space-between; align-items:center; gap:10px;">
+      <span style="font-weight:800; font-size:1.02rem;">점수는 이렇게 매깁니다</span>
+      <span style="color:var(--muted); font-size:.85rem; white-space:nowrap;">
+        {{ scoring['formula'].split(' + ')|length }}개 항목 합산 <span class="chev">▾</span></span>
+    </summary>
+    <div style="padding:0 16px 16px;">
   <div style="font-size:.9rem; line-height:1.55; color:var(--muted); margin-bottom:12px;">
     방문차량은 <b style="color:var(--ink);">단순 방문 전용</b>입니다. 방문답지 않은 흐름을 다섯 항목으로 계량해 더합니다.
   </div>
@@ -49,9 +64,12 @@
     {% if stats.below_min %}(이번 조회에서 {{ stats.below_min }}세대 제외){% endif %}
   </div>
 
-  <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line, #e5e7eb);
-              font-size:.88rem; line-height:1.55; color:#78350f; background:#fffbeb;
-              padding:10px 12px; border-radius:8px;">
+    </div>
+  </details>
+</div>
+
+<div class="card-k" style="padding:11px 14px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">
+  <div style="font-size:.88rem; line-height:1.55; color:#78350f;">
     <b>점수는 살펴볼 순서일 뿐 위반 판정이 아닙니다.</b> 장기 간병·가족 돌봄 등 정당한 사정이 있을 수 있으니
     조치 전에 소명을 받으세요.
   </div>

@@ -91,8 +91,17 @@ def delete_rows(table, params):
 
 
 def count_rows(table, params=None):
-    p = dict(params or {})
-    p.setdefault("select", "id")
+    """행 수만 센다. params 는 dict 또는 (key, value) 튜플 리스트.
+
+    튜플 리스트를 받는 이유는 entry_time 처럼 한 컬럼에 하한·상한을 함께
+    걸어야 하는 경우가 있어서다(dict 면 뒤 값이 앞 값을 덮어쓴다).
+    """
+    if isinstance(params, (list, tuple)):
+        p = [kv for kv in params if kv[0] not in ("select", "order", "limit", "offset")]
+        p.append(("select", "id"))
+    else:
+        p = dict(params or {})
+        p.setdefault("select", "id")
     headers = _headers({"Prefer": "count=exact", "Range-Unit": "items", "Range": "0-0"})
     resp = requests.get(f"{_base()}/{table}", headers=headers, params=p, timeout=15)
     resp.raise_for_status()

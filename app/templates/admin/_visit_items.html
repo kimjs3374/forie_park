@@ -1,0 +1,53 @@
+{# 방문등록 카드 묶음. 첫 화면과 무한 스크롤 추가분이 같은 조각을 쓴다. #}
+{% for r in registrations %}
+<div class="item" style="flex-direction:column; align-items:stretch;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+    <div style="min-width:0;">
+      <div class="plate" style="font-size:1.2rem;">{{ r.car_number }}
+        <span style="color:var(--muted); font-weight:600; font-size:.95rem;">{{ r.dong }}동 {{ r.ho }}호{% if r.user_name %} · {{ r.user_name }}{% endif %}</span></div>
+      <div class="time" data-inout
+           data-in="{{ dispmap.get(r.id, ('',''))[0] }}"
+           data-out="{{ dispmap.get(r.id, ('',''))[1] }}"
+           data-state="{{ r.visit_state or '' }}">
+        예약 {{ r.entry_time.strftime('%Y-%m-%d %H:%M') }} ~ {{ r.exit_time.strftime('%Y-%m-%d %H:%M') }}<br>
+        입차 <span class="v-in">-</span><br>
+        출차 <span class="v-out">-</span><br>
+        주차시간 <span class="v-dur">-</span>
+      </div>
+    </div>
+    {% if r.status == 'cancelled' %}
+      <span class="badge-k b-cancel">취소</span>
+    {% elif r.visit_state == 'exited' %}
+      <span class="badge-k b-cancel">출차완료</span>
+    {% elif r.visit_state == 'entered' %}
+      <span class="badge-k b-ok">주차중</span>
+    {% elif r.nexpa_registered and not r.is_expired %}
+      <span class="badge-k b-ok">등록완료</span>
+    {% elif r.nexpa_registered and r.is_expired %}
+      <span class="badge-k b-cancel">만료</span>
+    {% else %}
+      <span class="badge-k b-wait">등록중</span>
+    {% endif %}
+  </div>
+  {% set sm = summaries.get(r.id) %}
+  {% if sm and sm.logs %}
+  <details style="margin-top:12px;">
+    <summary style="cursor:pointer; font-weight:700; color:var(--primary); list-style:none;">
+      📋 입출차 로그 {{ sm.logs|length }}건 · 총 주차 {{ sm.total_text }}{% if sm.parked_now %} · 주차중{% endif %}
+    </summary>
+    <div style="margin-top:10px; border-left:3px solid var(--line, #e5e7eb); padding-left:14px;">
+      {% for lg in sm.logs %}
+      <div style="display:flex; gap:10px; align-items:center; padding:5px 0;">
+        <span class="badge-k {{ 'b-ok' if lg.is_in else 'b-cancel' }}" style="min-width:46px; text-align:center;">{{ '입차' if lg.is_in else '출차' }}</span>
+        <span style="font-variant-numeric:tabular-nums; font-weight:600;">{{ lg.event_time_kst.strftime('%m/%d %H:%M') if lg.event_time_kst else '-' }}</span>
+        {% if lg.source and lg.source != 'nexpa' %}<span style="color:var(--muted); font-size:.82rem;">({{ lg.source }})</span>{% endif %}
+      </div>
+      {% endfor %}
+      {% if sm.parked_now %}<div style="color:var(--primary); font-weight:700; padding-top:6px;">▶ 현재 주차중</div>{% endif %}
+    </div>
+  </details>
+  {% else %}
+  <div style="margin-top:10px; color:var(--muted); font-size:.88rem;">입출차 기록 없음</div>
+  {% endif %}
+</div>
+{% endfor %}
