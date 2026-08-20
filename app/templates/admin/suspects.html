@@ -3,11 +3,56 @@
 {% block content %}
 <div class="section-title"><span>부정사용 의심 세대</span></div>
 
-<div class="card-k" style="padding:14px 16px; margin-bottom:14px; background:#fffbeb; border-color:#fde68a;">
-  <div style="font-size:.9rem; line-height:1.55; color:#78350f;">
-    방문차량은 <b>단순 방문 전용</b>입니다. 같은 차량을 반복·연속 등록하거나 밤을 넘겨 상주하는 흐름을
-    네 축(반복·연속·야간·체류)으로 계량해 점수를 매겼습니다.
-    <b>점수는 살펴볼 순서일 뿐 위반 판정이 아닙니다</b> — 장기 간병·가족 돌봄 등 정당한 사정이 있을 수 있으니
+<div class="card-k" style="padding:16px; margin-bottom:14px;">
+  <div style="font-weight:800; font-size:1.02rem; margin-bottom:8px;">점수는 이렇게 매깁니다</div>
+  <div style="font-size:.9rem; line-height:1.55; color:var(--muted); margin-bottom:12px;">
+    방문차량은 <b style="color:var(--ink);">단순 방문 전용</b>입니다. 방문답지 않은 흐름을 다섯 항목으로 계량해 더합니다.
+  </div>
+
+  <div style="overflow-x:auto; -webkit-overflow-scrolling:touch;">
+    <table style="width:100%; border-collapse:collapse; font-size:.88rem; min-width:430px;">
+      <thead>
+        <tr style="text-align:left; color:var(--muted);">
+          <th style="padding:6px 8px 6px 0; font-weight:700;">항목</th>
+          <th style="padding:6px 8px; font-weight:700; white-space:nowrap;">배점</th>
+          <th style="padding:6px 8px; font-weight:700;">기준</th>
+          <th style="padding:6px 0 6px 8px; font-weight:700;">왜 보나</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in scoring['items'] %}
+        <tr style="border-top:1px solid var(--line, #e5e7eb);">
+          <td style="padding:7px 8px 7px 0; font-weight:800; white-space:nowrap;">{{ it.name }}</td>
+          <td style="padding:7px 8px; font-weight:800; color:var(--primary); white-space:nowrap;">{{ it.weight }}</td>
+          <td style="padding:7px 8px; line-height:1.4;">{{ it.unit }}<br>
+            <span style="color:var(--muted); font-size:.85rem;">{{ it.free }}</span></td>
+          <td style="padding:7px 0 7px 8px; color:var(--muted); line-height:1.4;">{{ it.why }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:12px; padding:10px 12px; background:var(--bg, #f8fafc); border-radius:8px;
+              font-size:.85rem; font-variant-numeric:tabular-nums; line-height:1.5; overflow-x:auto;">
+    <b>합계</b> = {{ scoring['formula'] }}
+  </div>
+
+  <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-size:.87rem;">
+    {% for lv in scoring['levels'] %}
+    <span><span class="badge-k {{ lv.css }}">{{ lv.label }}</span>
+      <span style="color:var(--muted);">{{ lv.range }}</span></span>
+    {% endfor %}
+  </div>
+  <div style="margin-top:8px; font-size:.85rem; color:var(--muted);">
+    {{ scoring['hidden_note'] }}
+    {% if stats.below_min %}(이번 조회에서 {{ stats.below_min }}세대 제외){% endif %}
+  </div>
+
+  <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--line, #e5e7eb);
+              font-size:.88rem; line-height:1.55; color:#78350f; background:#fffbeb;
+              padding:10px 12px; border-radius:8px;">
+    <b>점수는 살펴볼 순서일 뿐 위반 판정이 아닙니다.</b> 장기 간병·가족 돌봄 등 정당한 사정이 있을 수 있으니
     조치 전에 소명을 받으세요.
   </div>
 </div>
@@ -37,7 +82,9 @@
     <div><div style="font-size:1.6rem; font-weight:800; color:var(--primary);">{{ stats.flagged }}</div>
          <div class="sub" style="margin:0;">의심 세대</div></div>
     <div><div style="font-size:1.6rem; font-weight:800; color:#b91c1c;">{{ stats.high }}</div>
-         <div class="sub" style="margin:0;">위험도 높음</div></div>
+         <div class="sub" style="margin:0;">높음</div></div>
+    <div><div style="font-size:1.6rem; font-weight:800; color:#b45309;">{{ stats.mid }}</div>
+         <div class="sub" style="margin:0;">중간</div></div>
     <div><div style="font-size:1.6rem; font-weight:800;">{{ stats.households }}</div>
          <div class="sub" style="margin:0;">이용 세대</div></div>
     <div><div style="font-size:1.6rem; font-weight:800;">{{ stats.active }}</div>
@@ -51,7 +98,9 @@
 <div class="card-k" style="padding:14px 16px; margin-bottom:16px; background:#fef2f2; border-color:#fecaca;">
   <div style="font-weight:800; color:#b91c1c; margin-bottom:8px;">⚠ 여러 세대가 함께 등록한 차량</div>
   {% for c in stats.shared_cars %}
-  <div style="font-size:.92rem; padding:3px 0;"><span class="plate">{{ c.car_number }}</span> — {{ c.households }}</div>
+  <div style="font-size:.92rem; padding:3px 0;">
+    <a class="plate" style="color:#b91c1c; text-decoration:none;"
+       href="{{ url_for('admin.visits', **{'car': c.car_number}) }}">{{ c.car_number }}</a> — {{ c.households }}</div>
   {% endfor %}
 </div>
 {% endif %}
@@ -94,9 +143,17 @@
     {% if h.reasons %}
     <div style="margin-top:4px; font-size:.85rem; color:var(--muted);">신청사유: {{ h.reasons }}</div>
     {% endif %}
-    <div style="margin-top:8px;">
-      <a href="{{ url_for('admin.visits', **{'from': date_from, 'to': date_to}) }}"
-         style="font-size:.88rem; color:var(--primary); font-weight:700; text-decoration:none;">등록 내역에서 확인 →</a>
+    <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+      <a href="{{ url_for('admin.visits', **{'car': h.top_car, 'from': date_from, 'to': date_to}) }}"
+         style="font-size:.88rem; color:var(--primary); font-weight:700; text-decoration:none;">
+        {{ h.top_car }} 등록 내역 →</a>
+      {% if h.cars > 1 %}
+        {% for c in h.car_list.split(', ') if c != h.top_car %}
+        <a href="{{ url_for('admin.visits', **{'car': c, 'from': date_from, 'to': date_to}) }}"
+           style="font-size:.82rem; color:var(--muted); text-decoration:none;
+                  border:1px solid var(--line, #e5e7eb); border-radius:999px; padding:3px 10px;">{{ c }}</a>
+        {% endfor %}
+      {% endif %}
     </div>
   </div>
   {% endfor %}
@@ -112,7 +169,8 @@
   {% for a in anomalies %}
   <div style="padding:7px 0; border-top:1px solid var(--line, #e5e7eb); font-size:.9rem;">
     <span class="badge-k b-cancel">{{ a.kind }}</span>
-    <span class="plate" style="margin-left:6px;">{{ a.car_number }}</span>
+    <a class="plate" style="margin-left:6px; color:var(--primary); text-decoration:none;"
+       href="{{ url_for('admin.visits', **{'car': a.car_number}) }}">{{ a.car_number }}</a>
     {% if a.household %}<span style="color:var(--muted);"> {{ a.household }} {{ a.user }}</span>{% endif %}
     <div style="color:var(--muted); margin-top:3px;">{{ a.detail }}{% if a.reg_id %} (등록ID {{ a.reg_id }}){% endif %}</div>
   </div>

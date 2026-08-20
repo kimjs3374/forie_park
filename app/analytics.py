@@ -27,8 +27,50 @@ FREE_REPEAT = 2     # 이만큼은 정상 방문으로 봐준다
 FREE_RUN = 2
 FREE_MANY = 4
 
-SCORE_MIN = 5.0     # 이 미만은 목록에 올리지 않는다
-LEVELS = [(30.0, "높음", "b-cancel"), (12.0, "중간", "b-wait"), (0.0, "낮음", "b-ok")]
+LEVEL_HIGH = 30.0
+LEVEL_MID = 12.0
+LEVELS = [(LEVEL_HIGH, "높음", "b-cancel"), (LEVEL_MID, "중간", "b-wait"), (0.0, "낮음", "b-ok")]
+
+# 목록에 올리는 하한. 낮음(12점 미만)은 정상 방문과 잘 구분되지 않아 노출하지 않는다.
+SCORE_MIN = LEVEL_MID
+
+
+def scoring_rules():
+    """화면·문서에 그대로 쓰는 점수 산출 설명. 상수를 바꾸면 설명도 같이 따라간다."""
+    return {
+        "items": [
+            {"name": "반복", "weight": "%g점" % W_REPEAT,
+             "unit": "동일 차량을 등록한 날 1일당",
+             "free": "%d일까지 면제" % FREE_REPEAT,
+             "why": "같은 차가 며칠씩 드나들면 방문이 아니라 상시 주차에 가깝다"},
+            {"name": "연속", "weight": "%g점" % W_RUN,
+             "unit": "연속 등록 1일당",
+             "free": "%d일까지 면제" % FREE_RUN,
+             "why": "날짜가 이어질수록 거주 차량일 가능성이 높다"},
+            {"name": "야간", "weight": "%g점" % W_NIGHT,
+             "unit": "밤을 넘긴 체류 1회당", "free": "면제 없음",
+             "why": "방문객은 대개 당일에 나간다"},
+            {"name": "체류", "weight": "%g점" % W_STAY,
+             "unit": "누적 체류 1시간당", "free": "면제 없음",
+             "why": "오래 머물수록 주차장 부담이 크다"},
+            {"name": "건수", "weight": "%g점" % W_MANY,
+             "unit": "총 등록 1건당",
+             "free": "%d건까지 면제" % FREE_MANY,
+             "why": "이용 빈도 자체가 높은 세대를 함께 본다"},
+        ],
+        "formula": ("(반복일−%d)×%g + (연속일−%d)×%g + 야간횟수×%g "
+                    "+ 누적체류시간×%g + (등록건수−%d)×%g"
+                    % (FREE_REPEAT, W_REPEAT, FREE_RUN, W_RUN, W_NIGHT, W_STAY,
+                       FREE_MANY, W_MANY)),
+        "levels": [
+            {"label": "높음", "css": "b-cancel", "range": "%g점 이상" % LEVEL_HIGH},
+            {"label": "중간", "css": "b-wait",
+             "range": "%g점 이상 %g점 미만" % (LEVEL_MID, LEVEL_HIGH)},
+        ],
+        "min_score": SCORE_MIN,
+        "hidden_note": "%g점 미만(위험도 낮음)은 정상 방문과 잘 구분되지 않아 목록에서 제외합니다."
+                       % SCORE_MIN,
+    }
 
 
 def _kst(dt):
@@ -149,6 +191,7 @@ def scan(date_from=None, date_to=None):
     shared_cars = {c: h for c, h in car_hh.items() if len(h) > 1}
 
     rows = []
+    below = 0   # 하한 미만이라 숨긴 세대(있다는 사실은 알려 준다)
     for (dong, ho), a in hh.items():
         rep = max((len(d) for d in a["car_days"].values()), default=0)
         run = max((_max_run(d) for d in a["car_days"].values()), default=0)
@@ -162,6 +205,8 @@ def scan(date_from=None, date_to=None):
                  + a["stay"] * W_STAY
                  + max(0, a["regs"] - FREE_MANY) * W_MANY)
         if score < SCORE_MIN:
+            if score > 0:
+                below += 1
             continue
         label, css = level_of(score)
         # 왜 걸렸는지 사람이 읽을 근거를 만들어 둔다.
@@ -204,5 +249,8 @@ def scan(date_from=None, date_to=None):
                         for c, h in sorted(shared_cars.items())],
         "flagged": len(rows),
         "high": sum(1 for r in rows if r["level"] == "높음"),
+        "mid": sum(1 for r in rows if r["level"] == "중간"),
+        "below_min": below,
     }
-    return {"households": rows, "anomalies": anomalies, "stats": stats}
+    return {"households": rows, "anomalies": anomalies, "stats": stats,
+            "scoring": scoring_rules()}

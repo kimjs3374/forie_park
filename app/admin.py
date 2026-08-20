@@ -249,8 +249,16 @@ def export_workbook():
         ("방문등록", "%d건 (유효 %d건)" % (len(regs), sum(1 for r in regs if r.status != "cancelled"))),
         ("입출차 로그", "%d건" % len(logs)),
         ("이용 세대수", "%d세대" % st["households"]),
-        ("의심 세대", "%d세대 (위험도 높음 %d) — 기간 전체 기준" % (st["flagged"], st["high"])),
+        ("의심 세대", "%d세대 (높음 %d / 중간 %d) — 기간 전체 기준"
+                       % (st["flagged"], st["high"], st["mid"])),
         ("데이터 이상", "%d건" % len(report["anomalies"])),
+        ("", ""),
+        ("점수 산출식", report["scoring"]["formula"]),
+        ("배점 근거", " · ".join("%s %s(%s, %s)" % (i["name"], i["weight"], i["unit"], i["free"])
+                                  for i in report["scoring"]["items"])),
+        ("위험도 구간", " · ".join("%s %s" % (lv["label"], lv["range"])
+                                    for lv in report["scoring"]["levels"])),
+        ("목록 하한", report["scoring"]["hidden_note"]),
         ("", ""),
         ("시간대 표기", "실제 입/출차 및 로그는 KST(UTC+9). 신청 입/출차일은 저장값 그대로(일 단위)."),
         ("주의", "연락처·차량번호가 포함된 개인정보 문서입니다. 취급에 유의하세요."),
@@ -292,6 +300,7 @@ def suspects():
         households=report["households"],
         anomalies=report["anomalies"],
         stats=report["stats"],
+        scoring=report["scoring"],
         date_from=request.args.get("from", ""),
         date_to=request.args.get("to", ""),
     )
