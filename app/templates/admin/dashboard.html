@@ -19,6 +19,12 @@
     </span>
     <span style="color:var(--muted);">→</span>
   </a>
+  <a href="{{ url_for('admin.overuse') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">실주차일수 초과 차량
+      {% if overuse_count %}<span class="badge-k b-cancel" style="margin-left:6px;">{{ overuse_count }}</span>{% endif %}
+    </span>
+    <span style="color:var(--muted);">→</span>
+  </a>
   <a href="{{ url_for('admin.popups') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
     <span style="font-weight:700;">팝업(공지) 관리</span>
     <span style="color:var(--muted);">→</span>

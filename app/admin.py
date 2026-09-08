@@ -10,6 +10,7 @@ from flask_login import login_required, current_user
 
 from . import models
 from . import analytics
+from . import usage
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -35,8 +36,14 @@ def dashboard():
         # 분석이 실패해도 대시보드 자체는 열려야 한다.
         current_app.logger.exception("의심세대 집계 실패")
         suspect_count = 0
+    try:
+        overuse_count = usage.scan_overuse()["stats"]["flagged"]
+    except Exception:
+        current_app.logger.exception("실주차일수 초과 집계 실패")
+        overuse_count = 0
     return render_template("admin/dashboard.html",
-                           visit_count=visit_count, suspect_count=suspect_count)
+                           visit_count=visit_count, suspect_count=suspect_count,
+                           overuse_count=overuse_count)
 
 
 # 계정·명부 관리는 통합 관리(forie.kr/admin)로 이관되었다.
@@ -348,6 +355,34 @@ def export_suspects():
               "최대반복", "연속일", "야간체류", "누적체류(시간)", "미입차",
               "주요차량", "전체차량", "이용기간", "판단근거"]
     return _csv_response(rows, header, "parking_suspects")
+
+
+@admin_bp.route("/overuse")
+@admin_required
+def overuse():
+    """실주차일수(관제 입출차 기준) 월 한도 초과 차량."""
+    report = usage.scan_overuse(month=request.args.get("month"))
+    # 달 선택기 — 이번 달부터 12개월 뒤로.
+    base = usage.today_kst().replace(day=1)
+    months = []
+    for _ in range(12):
+        months.append("%d-%02d" % (base.year, base.month))
+        base = (base - timedelta(days=1)).replace(day=1)
+    return render_template("admin/overuse.html", months=months, **report)
+
+
+_OVERUSE_HEADER = ["순위", "차량번호", "실주차일수", "초과일수", "누적주차",
+                   "첫 주차일", "마지막 주차일", "최근 이벤트(KST)", "등록 세대"]
+
+
+@admin_bp.route("/overuse/export")
+@admin_required
+def export_overuse():
+    report = usage.scan_overuse(month=request.args.get("month"))
+    rows = [[i, r["car_number"], r["days"], r["over"], r["stay_text"],
+             r["first_day"], r["last_day"], _fmt(r["last_event"]), r["households"]]
+            for i, r in enumerate(report["rows"], 1)]
+    return _csv_response(rows, _OVERUSE_HEADER, "parking_overuse_%s" % report["period"])
 
 
 @admin_bp.route("/popups")

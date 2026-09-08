@@ -1,11 +1,12 @@
 """방문차량 등록 / 조회 / 취소 (입주민용)."""
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
 
 from . import models
+from . import usage
 from .nexpa_adapter import send_to_nexpa, cancel_on_nexpa
 
 main_bp = Blueprint("main", __name__)
@@ -17,6 +18,14 @@ MAX_VISIT_HOURS = 72
 #   12가3456 / 123가4567 / 서울12가3456 / 경기123가4567
 #   = (지역 한글2자)? + 숫자2~3 + 한글1 + 숫자4
 CAR_NUMBER_RE = re.compile(r"^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$")
+
+
+@main_bp.app_context_processor
+def _inject_quota_limit():
+    """월 주차 가능일수·시행일은 화면 곳곳에 문구로 나온다. 상수를 한 곳에서만 고치도록 넘긴다."""
+    return {"quota_limit": usage.MONTHLY_LIMIT_DAYS,
+            "quota_enforced": usage.is_enforced(),
+            "quota_from": usage.ENFORCE_FROM}
 
 
 def _same_household(reg, user):
@@ -115,6 +124,27 @@ def visit_new():
                              f"등록되어 있습니다. 기존 등록이 끝나거나 취소된 뒤에 다시 등록할 수 있습니다.")
                 return render_template("main/visit_new.html", form=request.form, block_msg=block_msg)
 
+        # 월 실주차일수 한도(차량 기준). 남은 일수가 모자라면 되는 데까지만 등록한다
+        # — 8일 쓴 차가 3일을 신청하면 2일로 잘린다.
+        entry_date, exit_date = entry_time.date(), exit_time.date()
+        last_allowed, quotas = usage.plan_registration(car_number, entry_date, exit_date)
+        if last_allowed is None:
+            q = quotas.get((entry_date.year, entry_date.month), {})
+            block_msg = (
+                f"이 차량({car_number})은 {entry_date.month}월 주차 가능일수 "
+                f"{usage.MONTHLY_LIMIT_DAYS}일을 모두 사용했습니다"
+                f"(사용 {q.get('used_days', usage.MONTHLY_LIMIT_DAYS)}일). "
+                f"매월 1일에 초기화되며, 장기 주차가 필요하면 관리사무소로 문의하세요.")
+            return render_template("main/visit_new.html", form=request.form,
+                                   block_msg=block_msg)
+        if last_allowed < exit_date:
+            # 신청한 기간을 말없이 줄이면 방문객이 못 나가는 사고가 난다. 반드시 알린다.
+            exit_time = datetime.combine(last_allowed, time(23, 59))
+            q = quotas.get((last_allowed.year, last_allowed.month), {})
+            flash(f"{last_allowed.month}월 주차 가능일수가 "
+                  f"{q.get('limit', usage.MONTHLY_LIMIT_DAYS) - q.get('used_days', 0)}일 남아 "
+                  f"출차일을 {last_allowed.strftime('%m월 %d일')}로 조정했습니다.", "warning")
+
         reg = models.visits_create({
             "user_id": current_user.id,
             "dong": current_user.dong,
@@ -143,6 +173,26 @@ def visit_new():
         return redirect(url_for("main.visit_list", registered=1))
 
     return render_template("main/visit_new.html", form={})
+
+
+@main_bp.route("/visits/quota")
+@login_required
+def visit_quota():
+    """차량번호의 이번 달 잔여 주차일수(JSON). 등록 폼이 입력 즉시 물어본다.
+
+    남의 차량번호를 넣어 이용 이력을 캐낼 수 없도록 날짜·세대·시각은 돌려주지
+    않고 숫자만 준다.
+    """
+    car = models.normalize_car_query(request.args.get("car", ""))
+    if not car or not CAR_NUMBER_RE.match(car):
+        return {"ok": False}, 400
+    today = usage.today_kst()
+    first, last = usage.month_bounds(today)
+    q = usage.car_quota(car, first, last, today=today)
+    return {"ok": True, "month": today.month, "limit": q["limit"],
+            "used": q["used_days"], "remaining": q["remaining"],
+            "enforced": usage.is_enforced(today),
+            "from": usage.ENFORCE_FROM.isoformat()}
 
 
 @main_bp.route("/visits/<int:reg_id>/cancel", methods=["POST"])

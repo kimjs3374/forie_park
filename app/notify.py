@@ -56,3 +56,21 @@ def send_visit_alert(name, dong, ho, car_number, phone, reason, book_start, book
         f"· 방문기간: {book_start} ~ {book_end}"
     )
     return _send(text)
+
+
+def send_overuse_alert(period, rows, limit):
+    """실주차일수 한도를 넘은 차량을 관리사무소에 알린다.
+
+    rows 는 usage.scan_overuse()["rows"] 중 아직 알리지 않은 것만 걸러 넘긴다
+    (정기등록 차량은 이미 빠져 있다).
+    """
+    if not rows:
+        return False
+    lines = ["⚠️ 실주차일수 %d일 초과 (%s)" % (limit, period), ""]
+    for r in rows:
+        lines.append("· %s — %d일 (한도 +%d) / %s"
+                     % (r["car_number"], r["days"], r["over"], r["households"]))
+    lines.append("")
+    lines.append("정기등록 차량은 제외한 목록입니다.")
+    lines.append("관리자 페이지 > 실주차일수 초과 차량 에서 상세를 확인하세요.")
+    return _send("\n".join(lines))

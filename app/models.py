@@ -872,3 +872,129 @@ def check_resident_match(dong, ho, name):
         "p_ho": (ho or "").strip(),
         "p_name": (name or "").strip(),
     }))
+
+
+# ---------------------------------------------------------- 실주차일수 집계용 조회
+def visit_logs_by_car(car_number, date_from=None, date_to=None):
+    """차량번호 완전일치 입출차 로그(발생시각 오름차순).
+
+    visit_logs_filter 는 검색용 부분일치라 '12가3456' 이 '112가3456' 까지 끌어온다.
+    실주차일수는 차량을 정확히 갈라야 하므로 여기서는 eq 로 건다.
+    기간은 KST 날짜 경계로 주고, 저장된 UTC 로 되돌려 거른다.
+    """
+    car = normalize_car_query(car_number)
+    if not car:
+        return []
+    params = [("select", "*"), ("order", "event_time.asc,id.asc"),
+              ("car_number", f"eq.{car}")]
+    if date_from:
+        params.append(("event_time", f"gte.{(date_from - timedelta(hours=9)).isoformat()}"))
+    if date_to:
+        end = date_to + timedelta(days=1) - timedelta(hours=9)
+        params.append(("event_time", f"lt.{end.isoformat()}"))
+    try:
+        return [VisitLog(r) for r in sb.fetch_all_rows(T_LOGS, params)]
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------- 정기등록 차량(관제 동기화)
+# 넥스파 관제 DB의 정기(월주차) 차량을 관리실 에이전트가 밀어 넣는 거울 테이블.
+# 이 앱은 읽기만 한다 — 실주차일수 초과 알림에서 상시 주차가 정상인 차를 빼기 위해서다.
+T_REGULAR = "parking_regular_cars"
+
+
+class RegularCar:
+    def __init__(self, row):
+        self._row = row or {}
+
+    @property
+    def car_number(self):
+        return self._row.get("car_number")
+
+    @property
+    def owner_name(self):
+        return self._row.get("owner_name")
+
+    @property
+    def dong(self):
+        return self._row.get("dong")
+
+    @property
+    def ho(self):
+        return self._row.get("ho")
+
+    @property
+    def valid_from(self):
+        return self._row.get("valid_from")
+
+    @property
+    def valid_to(self):
+        return self._row.get("valid_to")
+
+    @property
+    def synced_at(self):
+        return _parse_dt(self._row.get("synced_at"))
+
+    @property
+    def household_label(self):
+        return f"{self.dong}동 {self.ho}호" if (self.dong and self.ho) else "-"
+
+
+# 관제에서 빠진 차량을 지우는 대신, 에이전트는 매 회차 전량을 upsert 하며
+# synced_at 을 갱신하고 앱이 뒤처진 행을 빠진 것으로 본다. 에이전트(anon 키)에
+# DELETE/조건부 UPDATE 권한을 주지 않기 위한 설계다 — 조건부 UPDATE 는 WHERE 절
+# 컬럼에 SELECT 권한을 요구해서 차량번호 테이블을 anon 에 열어야 한다.
+# 기준은 '마지막 동기화 시각' 이므로 에이전트가 멈춰도 명단이 통째로 무효가 되지 않는다.
+REGULAR_STALE_DAYS = 2
+
+
+def regular_cars_active(today=None):
+    """오늘 유효한 정기등록 차량. 테이블 미생성/조회실패 시 빈 리스트."""
+    today_s = (today or datetime.now(timezone.utc).date()).isoformat()
+    params = [("is_active", "eq.true"),
+              ("or", f"(valid_to.is.null,valid_to.gte.{today_s})"),
+              ("order", "car_number.asc")]
+    latest = regular_cars_synced_at()
+    if latest:
+        cutoff = latest - timedelta(days=REGULAR_STALE_DAYS)
+        params.append(("synced_at", f"gte.{cutoff.isoformat()}"))
+    try:
+        return [RegularCar(r) for r in sb.fetch_all_rows(T_REGULAR, params)]
+    except Exception:
+        return []
+
+
+def regular_car_numbers(today=None):
+    """오늘 유효한 정기등록 차량번호 집합."""
+    return {c.car_number for c in regular_cars_active(today) if c.car_number}
+
+
+def regular_cars_synced_at():
+    """가장 최근 동기화 시각. 에이전트가 살아 있는지 화면에서 보여 주기 위한 값."""
+    try:
+        row = sb.fetch_one(T_REGULAR, [("select", "synced_at"),
+                                       ("order", "synced_at.desc")])
+    except Exception:
+        return None
+    return _parse_dt(row.get("synced_at")) if row else None
+
+
+# ---------------------------------------------------------- 한도 초과 알림 이력
+# 같은 차량을 매일 다시 알리지 않도록 (차량번호, 해당월)로 한 번만 보낸다.
+T_OVERUSE = "parking_overuse_alerts"
+
+
+def overuse_alert_keys(period):
+    """해당 월(YYYY-MM)에 이미 알린 차량번호 집합."""
+    try:
+        rows = sb.fetch_all_rows(T_OVERUSE, [("select", "car_number"),
+                                             ("period", f"eq.{period}")])
+    except Exception:
+        return set()
+    return {r.get("car_number") for r in rows if r.get("car_number")}
+
+
+def overuse_alert_add(car_number, period, days):
+    return sb.insert_row(T_OVERUSE, {"car_number": car_number,
+                                     "period": period, "days": int(days)})

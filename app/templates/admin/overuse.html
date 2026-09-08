@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}관리 - 실주차일수 초과{% endblock %}
+{% block content %}
+<style>
+  .ou-head{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .ou-head select{ height:44px; border:2px solid var(--line); border-radius:12px;
+    padding:0 12px; font-weight:700; background:#f8fafc; color:var(--ink); }
+  .ou-row{ display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:start; }
+  .ou-car{ font-size:1.15rem; font-weight:800; letter-spacing:.03em; }
+  .ou-meta{ color:var(--muted); font-size:.88rem; line-height:1.55; }
+  .ou-days{ text-align:right; font-weight:800; font-size:1.3rem; color:var(--danger); white-space:nowrap; }
+  .ou-days small{ display:block; font-size:.75rem; font-weight:600; color:var(--muted); }
+  .note{ background:#f8fafc; border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; color:var(--muted); font-size:.9rem; line-height:1.7; }
+  .note b{ color:var(--ink); }
+</style>
+
+<div class="section-title">
+  <span>실주차일수 초과</span>
+  <a href="{{ url_for('admin.dashboard') }}">← 관리</a>
+</div>
+
+{% if not enforced %}
+<div class="flash warning" style="margin-bottom:14px;">
+  시행 전 미리보기입니다. {{ enforce_from.strftime('%Y년 %-m월 %-d일') }}부터 등록 제한과
+  텔레그램 알림이 실제로 걸립니다. 지금은 집계만 하며 입주민 등록은 막지 않습니다.
+</div>
+{% endif %}
+
+<form class="ou-head" method="get">
+  <select name="month" onchange="this.form.submit()">
+    {% for m in months %}
+    <option value="{{ m }}" {% if m == period %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <a class="btn-k btn-ghost" style="height:44px; line-height:44px; padding:0 16px;"
+     href="{{ url_for('admin.export_overuse', month=period) }}">CSV</a>
+</form>
+
+<div class="card-k" style="margin-bottom:16px;">
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; text-align:center;">
+    <div>
+      <div style="font-size:1.8rem; font-weight:800; color:var(--danger);">{{ stats.flagged }}</div>
+      <div class="sub" style="margin:0;">초과 차량</div>
+    </div>
+    <div>
+      <div style="font-size:1.8rem; font-weight:800; color:var(--primary);">{{ stats.cars }}</div>
+      <div class="sub" style="margin:0;">이용 차량</div>
+    </div>
+    <div>
+      <div style="font-size:1.8rem; font-weight:800; color:var(--muted);">{{ regular_count }}</div>
+      <div class="sub" style="margin:0;">정기등록(제외)</div>
+    </div>
+  </div>
+</div>
+
+{% if rows %}
+<div class="stack">
+  {% for r in rows %}
+  <div class="item">
+    <div class="ou-row" style="width:100%;">
+      <div>
+        <div class="ou-car">{{ r.car_number }}</div>
+        <div class="ou-meta">
+          {{ r.households }}<br>
+          누적 {{ r.stay_text }} · {{ r.first_day }} ~ {{ r.last_day }}
+          {% if r.last_event %}<br>최근 이벤트 {{ r.last_event.strftime('%m-%d %H:%M') }}{% endif %}
+        </div>
+      </div>
+      <div class="ou-days">{{ r.days }}일<small>한도 +{{ r.over }}</small></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card-k" style="text-align:center; color:var(--muted); padding:28px 12px;">
+  {{ period }}에 {{ limit }}일을 넘긴 차량이 없습니다.
+</div>
+{% endif %}
+
+{% if excluded %}
+<details style="margin-top:16px;">
+  <summary style="cursor:pointer; font-weight:700; color:#cbd5e1; padding:8px 4px;">
+    정기등록이라 제외한 차량 {{ excluded|length }}대
+  </summary>
+  <div class="stack" style="margin-top:10px;">
+    {% for r in excluded %}
+    <div class="item">
+      <div class="ou-row" style="width:100%;">
+        <div>
+          <div class="ou-car" style="color:var(--muted);">{{ r.car_number }}</div>
+          <div class="ou-meta">{{ r.households }} · 누적 {{ r.stay_text }}</div>
+        </div>
+        <div class="ou-days" style="color:var(--muted);">{{ r.days }}일<small>정기등록</small></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<div class="section-title" style="margin-top:22px;"><span>집계 기준</span></div>
+<div class="note">
+  <b>실주차일수</b>는 신청 기간이 아니라 관제 입출차 로그로 셉니다.
+  하루 합계 <b>{{ turnaround }}분 이하</b>면 회차차량으로 보아 세지 않고,
+  자정을 넘긴 체류는 날짜별로 쪼개 각각 판정합니다.<br>
+  한도는 차량번호 기준 <b>매월 {{ limit }}일</b>이며 매월 1일에 초기화됩니다
+  (시행일 {{ enforce_from.strftime('%Y-%m-%d') }}).
+  시행 후에는 등록 화면에서 한도를 넘는 신청이 잔여일수만큼 잘리므로, 이 목록은
+  <b>등록보다 오래 주차한 차량</b>을 뜻하게 됩니다.<br>
+  정기등록 차량은 관제 DB 동기화본으로 제외합니다 —
+  마지막 동기화 {% if regular_synced_at %}{{ regular_synced_at.strftime('%Y-%m-%d %H:%M') }} (UTC)
+  {% else %}<b style="color:var(--danger);">기록 없음 — 에이전트 동기화 미설정</b>{% endif %}.
+</div>
+{% endblock %}
