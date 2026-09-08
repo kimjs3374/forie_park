@@ -29,7 +29,14 @@
     </div>
 
     <div style="display:flex; justify-content:center;">
-      <div id="qr" style="background:#fff; padding:14px; border-radius:16px; border:1px solid var(--line);"></div>
+      <div style="background:#fff; padding:14px; border-radius:16px; border:1px solid var(--line); line-height:0;">
+        {% if qr_svg %}{{ qr_svg }}{% else %}
+        <div style="width:198px; height:198px; display:flex; align-items:center; justify-content:center;
+                    color:var(--danger); font-weight:700; font-size:.9rem; text-align:center; line-height:1.5;">
+          QR 을 만들지 못했습니다.<br>아래 주소와 PIN 을 직접 안내해 주세요.
+        </div>
+        {% endif %}
+      </div>
     </div>
 
     <div style="font-weight:800; font-size:1.05rem; letter-spacing:-.01em;">
@@ -55,16 +62,4 @@
   <a href="{{ url_for('admin.lookups') }}" class="btn-k btn-ghost">조회기록 보기</a>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-<script>
-(function(){
-  var target = {{ qr_url|tojson }};
-  var box = document.getElementById('qr');
-  if(!window.QRCode){ box.textContent = 'QR 생성 스크립트를 불러오지 못했습니다.'; return; }
-  QRCode.toCanvas(target, { width: 240, margin: 1 }, function(err, canvas){
-    if(err){ box.textContent = 'QR 생성 실패'; return; }
-    box.appendChild(canvas);
-  });
-})();
-</script>
 {% endblock %}

@@ -2,6 +2,8 @@
 import csv
 import io          # CSV 내보내기에서 쓴다
 from urllib.parse import quote
+
+from markupsafe import Markup
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
@@ -450,9 +452,23 @@ def lookups():
 @admin_bp.route("/lookup-qr")
 @admin_required
 def lookup_qr():
-    """경비실에 붙일 QR. PIN 이 박혀 있어 찍으면 곧바로 조회 화면이 열린다."""
+    """경비실에 붙일 QR. PIN 이 박혀 있어 찍으면 곧바로 조회 화면이 열린다.
+
+    QR 은 서버에서 SVG 로 그려 본문에 심는다. 이 화면의 결과물은 경비실 벽에
+    붙는 종이라, 외부 CDN 스크립트에 매달아 두면 그 CDN 이 흔들리는 날 인쇄가
+    빈 칸으로 나온다. SVG 라 확대·인쇄에도 깨지지 않는다.
+    """
     pin = (current_app.config.get("LOOKUP_PIN") or "").strip()
     base_url = url_for("lookup.index", _external=True)
     qr_url = base_url + ("?pin=" + quote(pin, safe="") if pin else "")
+
+    qr_svg = None
+    try:
+        import segno
+        qr_svg = Markup(segno.make(qr_url, error="m").svg_inline(
+            scale=6, border=2, dark="#0f172a"))
+    except Exception:
+        current_app.logger.exception("경비실 QR 생성 실패")
+
     return render_template("admin/lookup_qr.html", pin=pin, pin_set=bool(pin),
-                           base_url=base_url, qr_url=qr_url)
+                           base_url=base_url, qr_url=qr_url, qr_svg=qr_svg)
