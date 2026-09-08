@@ -50,6 +50,11 @@
     <div>
       <div style="font-size:1.8rem; font-weight:800; color:var(--muted);">{{ regular_count }}</div>
       <div class="sub" style="margin:0;">정기등록(제외)</div>
+      {% if regular_groups %}
+      <div class="sub" style="margin:4px 0 0; font-size:.72rem; line-height:1.5;">
+        {% for g, n in regular_groups %}{{ g }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -93,9 +98,66 @@
       <div class="ou-row" style="width:100%;">
         <div>
           <div class="ou-car" style="color:var(--muted);">{{ r.car_number }}</div>
-          <div class="ou-meta">{{ r.households }} · 누적 {{ r.stay_text }}</div>
+          <div class="ou-meta">{{ r.regular_label or r.households }} · 누적 {{ r.stay_text }}</div>
         </div>
         <div class="ou-days" style="color:var(--muted);">{{ r.days }}일<small>정기등록</small></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+{% if open_check %}
+<div class="section-title" style="margin-top:22px;"><span>관제 확인 요망</span></div>
+<div class="note" style="margin-bottom:10px;">
+  아래 {{ open_check|length }}대는 <b>출차 기록이 없는 채로 한도({{ limit }}일)를 넘길 만큼</b>
+  오래 남아 있습니다. <b>실제로 계속 서 있는 차인지만</b> 확인해 주세요 —
+  차가 없으면 넥스파에서 출차 처리하면 되고(그러면 자동으로 다시 집계됩니다),
+  차가 있으면 규약 3·4항 별도등록 대상입니다.
+  확인 전까지는 안전하게 <b>{{ open_review_hours // 24 }}박</b>으로만 세므로
+  잘못 초과 판정될 일은 없습니다.
+</div>
+<div class="stack">
+  {% for r in open_check %}
+  <div class="item">
+    <div class="ou-row" style="width:100%;">
+      <div>
+        <div class="ou-car">{{ r.car_number }}</div>
+        <div class="ou-meta">{{ r.entered_at.strftime('%m/%d %H:%M') }} 입차 · {{ r.household }}</div>
+      </div>
+      <div class="ou-days" style="color:#fbbf24;">{{ r.days }}일<small>서 있었다면 {{ r.if_parked_nights }}박</small></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if open_stays %}
+<details style="margin-top:16px;">
+  <summary style="cursor:pointer; font-weight:700; color:var(--muted); padding:8px 4px;">
+    출차 기록 없는 차량 {{ open_stays|length }}대 (참고 — 확인 안 해도 집계는 안전)
+  </summary>
+  <div class="note" style="margin:8px 0 10px;">
+    입차 후 <b>{{ open_review_hours }}시간</b>이 지나도록 출차 로그가 없는 차량입니다.
+    LPR 출차 인식 누락이 대부분이고, 이런 건은 숙박일수를
+    <b>{{ open_review_hours // 24 }}박까지만</b> 세므로 <b>누가 잘못 초과 판정을 받지는 않습니다.</b>
+    넥스파 출차 인식 품질을 보는 지표로 쓰세요 — 이 수가 계속 늘면 LPR 쪽을 손봐야 합니다.
+    <a href="{{ url_for('admin.export_open_stays') }}">CSV 내려받기</a>
+  </div>
+  <div class="stack">
+    {% for r in open_stays %}
+    <div class="item">
+      <div class="ou-row" style="width:100%;">
+        <div>
+          <div class="ou-car" style="color:var(--muted);">{{ r.car_number }}</div>
+          <div class="ou-meta">
+            {{ r.entered_at.strftime('%m/%d %H:%M') }} 입차 ·
+            {% if r.is_regular %}{{ r.group_name }}{% if r.household != '미등록(호출 입차)' %} · {{ r.household }}{% endif %}
+            {% else %}{{ r.household }}{% endif %}
+          </div>
+        </div>
+        <div class="ou-days" style="color:var(--muted);">{{ r.days }}일<small>경과 · {{ r.counted_nights }}박 집계</small></div>
       </div>
     </div>
     {% endfor %}

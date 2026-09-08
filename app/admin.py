@@ -379,6 +379,21 @@ _OVERUSE_HEADER = ["순위", "차량번호", "숙박일수", "초과일수", "�
                    "첫 숙박일", "마지막 숙박일", "최근 이벤트(KST)", "등록 세대",
                    "시스템등록", "미출차"]
 
+_OPEN_HEADER = ["차량번호", "입차(KST)", "경과시간", "경과일", "현재 집계 숙박일수",
+                "세대", "정기등록", "구분"]
+
+
+@admin_bp.route("/overuse/open-export")
+@admin_required
+def export_open_stays():
+    """미출차 점검 목록 CSV — 관제에 출차 누락을 확인시킬 때 쓴다."""
+    rows = [[r["car_number"], _fmt(r["entered_at"]), r["hours"], r["days"],
+             r["counted_nights"], r["household"],
+             "예" if r["is_regular"] else "", r["group_name"] or ""]
+            for r in usage.open_stays()]
+    return _csv_response(rows, _OPEN_HEADER,
+                         "parking_open_stays_%s" % usage.today_kst().isoformat())
+
 
 @admin_bp.route("/overuse/export")
 @admin_required

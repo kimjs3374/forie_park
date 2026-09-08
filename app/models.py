@@ -937,8 +937,35 @@ class RegularCar:
         return _parse_dt(self._row.get("synced_at"))
 
     @property
+    def group_id(self):
+        return self._row.get("group_id")
+
+    @property
+    def group_name(self):
+        """구분 — 입주민/전기차/협력사·도우미/택배/관리사무소.
+        넥스파 season_car_group_id 를 에이전트가 라벨까지 붙여 올린다."""
+        return self._row.get("group_name") or (
+            f"그룹{self.group_id}" if self.group_id else "-")
+
+    @property
+    def is_resident(self):
+        """입주민 차량인가. 전기차(4) 도 실측상 전건 동/호가 있는 입주민 차량이다."""
+        return self.group_id in (1, 4)
+
+    @property
     def household_label(self):
         return f"{self.dong}동 {self.ho}호" if (self.dong and self.ho) else "-"
+
+    @property
+    def label(self):
+        """화면용 한 줄 — '입주민 · 301동 1001호 · 정길현' / '택배 · 쿠팡'.
+        동/호는 넥스파 원천에 있는 그룹만 채워진다(택배·관리사무소는 원래 없다)."""
+        parts = [self.group_name]
+        if self.dong and self.ho:
+            parts.append(f"{self.dong}동 {self.ho}호")
+        if self.owner_name:
+            parts.append(self.owner_name)
+        return " · ".join(p for p in parts if p and p != "-")
 
 
 # 관제에서 빠진 차량을 지우는 대신, 에이전트는 매 회차 전량을 upsert 하며
@@ -968,6 +995,18 @@ def regular_cars_active(today=None):
 def regular_car_numbers(today=None):
     """오늘 유효한 정기등록 차량번호 집합."""
     return {c.car_number for c in regular_cars_active(today) if c.car_number}
+
+
+def regular_cars_map(today=None):
+    """{차량번호: RegularCar} — 초과 목록에 구분·세대를 붙이기 위한 조회용."""
+    return {c.car_number: c for c in regular_cars_active(today) if c.car_number}
+
+
+def regular_cars_by_group(today=None):
+    """구분별 대수 → [(구분명, 대수), ...] 대수 내림차순."""
+    from collections import Counter
+    tally = Counter(c.group_name for c in regular_cars_active(today))
+    return sorted(tally.items(), key=lambda x: -x[1])
 
 
 def regular_cars_synced_at():

@@ -14,3 +14,4 @@ migrations/versions/*.pyc
 *.bak
 *.bak[0-9]
 *.bak[A-Z]
+*.bak[A-Z]*

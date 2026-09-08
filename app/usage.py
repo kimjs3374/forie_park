@@ -47,6 +47,42 @@ ENFORCE_FROM = date(2026, 10, 1)
 # 루프가 끝없이 돌 수 있어 이 일수에서 끊는다.
 MAX_SPLIT_DAYS = 400
 
+# ---------------------------------------------------------------- 미출차 보정
+# 이 현장 관제(넥스파)는 **입차만 찍히고 출차가 없는 행**을 꾸준히 남긴다.
+# 2026-09-08 실측(미등록 입차 30일 1,699건):
+#   · out_check=0 인 396건이 전부 출차 없음 / out_check=2·4 인 1,303건은 전부 출차 있음
+#   · 출차 없는 392건 중 374건(95%)이 그 뒤 같은 번호판으로 재입차 = 차는 이미 나갔다
+#   · 경과일수 분포가 0~30일에 걸쳐 평평 = 장기주차가 아니라 하루 ~13건씩 생기는 기록 누락
+# 그래서 "출차 로그가 없으면 지금까지 주차중"으로 보면 안 된다. 그대로 두면 8월 집계에서
+# 나가고 없는 차 4대가 12~23박으로 잡혔다(실측).
+#
+# 규칙: 출차 없는 체류는 ① 같은 차량의 **다음 입차 시각**에 끝난 것으로 보고,
+#       ② 그와 별개로 입차부터 OPEN_STAY_MAX_HOURS 를 넘겨 세지 않는다.
+#
+# ── 상한을 72시간으로 잡은 근거 ──────────────────────────────────────────
+# 이 상한은 **출차가 아직 안 찍힌 동안에만** 걸린다. 출차가 정상으로 찍힌 체류는
+# 며칠이든 그대로 센다(실측: 전남98사3351 의 8/18~8/28 10일 체류 → 11박 그대로).
+# 그리고 출차가 나중에 찍히면 에이전트가 그 이벤트를 올려 **소급해서 전부 다시 세어진다**
+# (agent nexpa_orphan_events 가 in_date/out_date 둘 다로 조회하므로 언제 찍혀도 잡힌다).
+# 즉 상한은 '아직 진행 중인 체류'에만 적용되는 잠정값이다.
+#
+# 그 잠정값을 72시간으로 두는 이유는 **방문 등록 폼의 최대치가 3일**이기 때문이다.
+# 정상 방문이 만들 수 있는 최대 숙박이 3박이므로, 진행 중 체류를 3박까지 인정하면
+# 정상 범위를 다 덮는다. 그보다 오래 서 있는 차는 규약 3·4항 별도등록 대상이거나
+# 이상 상황이라 [미출차] 로 사람이 봐야 한다.
+#
+# 2026-09-08 실측 — 30일간 출차 없는 입차 395건 중
+#   · 379건이 LPR 인식실패값('0000000000') = 애초에 버려진다
+#   · 유효 번호판은 16건뿐이고 그 중 15건은 재입차도 다른 행 출차도 전혀 없다
+#   · 경과일이 0~29일에 고르게 퍼져 있다 = 진짜 장기주차가 아니라 상시 발생하는 기록 누락
+# 24시간으로 잡으면 이 15건을 1박으로 깎지만 정상 3일 방문도 같이 깎인다. 72시간이면
+# 유령 피해는 최대 3박(한도 10일에 한참 못 미침)이고 정상 방문은 손대지 않는다.
+OPEN_STAY_MAX_HOURS = 72
+
+# 입구 LPR 이 같은 차를 몇 초 간격으로 두 번 읽는 경우가 있다. 이 시간 안의 연속 입차는
+# 중복 스캔으로 보고 먼저 입차를 살린다(체류를 쪼개지 않는다).
+DUP_ENTRY_MINUTES = 5
+
 
 def _kst(dt):
     """timestamptz(UTC) → KST naive."""
@@ -104,28 +140,43 @@ def _overlap_minutes(a1, a2, b1, b2):
     return max(0, int((hi - lo).total_seconds() // 60))
 
 
+def _open_end(start, hard_end):
+    """출차 로그가 없는 체류의 종료 시각(UTC) — 상한을 넘기지 않는다.
+    hard_end 는 '다음 입차' 또는 '지금'. 자세한 근거는 OPEN_STAY_MAX_HOURS 주석 참조."""
+    return min(hard_end, start + timedelta(hours=OPEN_STAY_MAX_HOURS))
+
+
 def stays(logs, now=None):
     """입/출 로그를 짝지어 (시작, 끝) KST naive 체류구간 목록으로.
 
-    아직 출차 로그가 없는 마지막 입차는 now 까지를 잠정 체류로 본다(주차중).
-    출차 없이 입차가 연달아 찍힌 구간(관제 중복 이벤트)은 먼저 들어온 입차를
-    살려 하나의 연속 체류로 본다 — 짝 없는 입차를 버리면 실제 숙박이 통째로
-    사라져 한도가 헐거워지기 때문이다. 짝 없는 출차는 시작 시각을 알 수 없어 버린다.
+    짝 없는 출차는 시작 시각을 알 수 없어 버린다.
+
+    출차 로그가 없는 입차는 **끝없이 이어지는 체류로 보지 않는다.**
+      · 같은 차량의 다음 입차가 있으면 그 시각에 끝난 것으로 본다(그 사이에 나갔다는 뜻).
+      · 어느 경우든 OPEN_STAY_MAX_HOURS 를 넘겨 세지 않는다.
+    DUP_ENTRY_MINUTES 안의 연속 입차는 LPR 중복 스캔이라 쪼개지 않고 먼저 입차를 살린다.
+    이 현장은 입차만 남는 기록 누락이 상시 발생한다 — 위 상수 주석의 실측 근거 참조.
     """
     now = now or datetime.now(timezone.utc)
+    evs = [lg for lg in sorted(logs, key=lambda x: (x.event_time
+                                                    or datetime.min.replace(tzinfo=timezone.utc)))
+           if lg.event_time]
     out, open_in = [], None
-    for lg in sorted(logs, key=lambda x: (x.event_time
-                                          or datetime.min.replace(tzinfo=timezone.utc))):
-        if not lg.event_time:
-            continue
+    for lg in evs:
         if lg.is_in:
             if open_in is None:
                 open_in = lg.event_time
+                continue
+            if (lg.event_time - open_in).total_seconds() <= DUP_ENTRY_MINUTES * 60:
+                continue                      # 중복 스캔 — 먼저 입차 유지
+            # 출차 기록 없이 다시 들어왔다 = 그 사이에 나갔다. 앞 체류를 여기서 닫는다.
+            out.append((_kst(open_in), _kst(_open_end(open_in, lg.event_time))))
+            open_in = lg.event_time
         elif open_in is not None:
             out.append((_kst(open_in), _kst(lg.event_time)))
             open_in = None
     if open_in is not None:
-        out.append((_kst(open_in), _kst(now)))
+        out.append((_kst(open_in), _kst(_open_end(open_in, now))))
     # 초 단위는 버린다(models._minutes_between 과 같은 규칙).
     return [(s.replace(second=0, microsecond=0), e.replace(second=0, microsecond=0))
             for s, e in out if s and e and e > s]
@@ -244,6 +295,98 @@ def plan_registration(car_number, entry_dt, exit_dt, today=None, now=None):
     return {"nights": nights, "allowed": allowed, "quotas": quotas}
 
 
+# --------------------------------------------------------------- 미출차 점검 목록
+
+# 이 시간을 넘겨 출차 기록이 없으면 점검 목록에 올린다. 상한(OPEN_STAY_MAX_HOURS)에
+# 걸리는 순간부터 집계가 잠정값이 되므로 같은 값을 쓴다.
+OPEN_REVIEW_HOURS = OPEN_STAY_MAX_HOURS
+# 점검 목록을 만들 때 거슬러 읽는 기간
+OPEN_REVIEW_DAYS = 45
+
+# 월 집계 때 달 시작보다 이만큼 더 거슬러 읽는다.
+# ⚠️ 예전엔 하루만 넓혔는데(경계의 밤용), 그러면 **그 달 이전에 시작된 체류를 통째로 놓친다.**
+#    입차 로그가 조회창 밖이라 짝 없는 출차만 보이고, 짝 없는 출차는 버려지기 때문이다.
+#    실측(2026-09-08): 147구2290 이 7/26 입차 ~ 8/29 출차로 34일을 세워 뒀는데(출차 정상)
+#    8월 집계에 0박으로 잡혔다. 8월 밤 28개가 통째로 사라진 것이다.
+#    60일 실측상 72h 넘는 정상 체류는 0.6%뿐이고 최장이 34일이라 45일이면 충분하다.
+SCAN_LOOKBACK_DAYS = 45
+
+
+def open_stays(now=None, days=OPEN_REVIEW_DAYS):
+    """출차 로그 없이 남아 있는 입차 목록.
+
+    ── 이 목록을 사람이 다 확인할 필요는 없다 ──────────────────────────────
+    짝 없는 입차는 OPEN_STAY_MAX_HOURS 에서 잘리므로 숙박일수가 3박을 넘지 않는다.
+    즉 **미출차 때문에 누가 잘못 초과 판정을 받는 일은 없다.** 집계는 이미 안전하다.
+
+    사람 확인이 실제로 결과를 바꾸는 경우는 하나뿐이다 —
+    **그 차가 정말 계속 서 있었다면 한도를 넘었을 건**(`would_exceed`).
+    그 경우에만 진짜 초과인지 아닌지가 갈리므로 관제 확인이 의미가 있다.
+    나머지는 넥스파 출차 인식 품질을 보는 참고 지표일 뿐이다.
+
+    `would_exceed` 판정: 입차 이후 지금까지의 밤 수 + 그 달 이미 부과된 밤 수가
+    MONTHLY_LIMIT_DAYS 를 넘는가. 즉 '최악의 경우' 계산이다.
+
+    반환: [{car_number, entered_at, hours, days, counted_nights, if_parked_nights,
+            would_exceed, household, is_regular, group_name}, ...] 오래된 순.
+    """
+    now = now or datetime.now(timezone.utc)
+    today = _kst(now).date()
+    since = datetime.combine(today - timedelta(days=days), time.min)
+    logs = models.visit_logs_filter(since, datetime.combine(today + timedelta(days=1), time.min))
+
+    by_car = defaultdict(list)
+    for lg in logs:
+        if lg.car_number:
+            by_car[lg.car_number].append(lg)
+
+    regular_map = models.regular_cars_map(today)
+    out = []
+    for car, items in by_car.items():
+        evs = sorted((lg for lg in items if lg.event_time), key=lambda x: x.event_time)
+        if not evs or not evs[-1].is_in:
+            continue                      # 마지막이 출차 = 정상
+        entered = evs[-1].event_time
+        hours = (now - entered).total_seconds() / 3600.0
+        if hours < OPEN_REVIEW_HOURS:
+            continue                      # 아직 정상 체류 범위 — 주차중일 뿐이다
+        rc = regular_map.get(car)
+        counted = len(parked_nights(items, now=now))
+        # 정기차량은 상시 주차가 정상이라 한도 대상이 아니다 — 확인할 이유가 없다.
+        # '계속 서 있었다면' 몇 박이 됐을지: 입차일 밤부터 오늘까지.
+        entered_kst = _kst(entered)
+        if_parked = len([d for d in daterange(entered_kst.date(), today)])
+        month_first, _ = month_bounds(today)
+        in_month = len([d for d in daterange(max(entered_kst.date(), month_first), today)])
+        out.append({
+            "car_number": car,
+            "entered_at": entered_kst,
+            "hours": int(hours),
+            "days": round(hours / 24.0, 1),
+            "counted_nights": counted,
+            "if_parked_nights": if_parked,
+            # 관제 확인이 결론을 바꾸는 건 이것뿐이다(정기차량은 애초에 한도 밖).
+            "would_exceed": (not rc) and in_month > MONTHLY_LIMIT_DAYS,
+            "is_regular": rc is not None,
+            "group_name": rc.group_name if rc else None,
+            "household": (rc.household_label if rc and rc.household_label != "-"
+                          else _household_of(car)),
+        })
+    out.sort(key=lambda x: (not x["would_exceed"], x["entered_at"]))
+    return out
+
+
+def _household_of(car_number):
+    """방문등록 이력에서 세대를 찾는다. 없으면 '미등록(호출 입차)'."""
+    try:
+        for r in models.visits_active_by_car(car_number):
+            if r.dong and r.ho:
+                return f"{r.dong}동 {r.ho}호"
+    except Exception:
+        pass
+    return "미등록(호출 입차)"
+
+
 # ------------------------------------------------------------------ 한도 초과 감시
 
 def _stay_text(minutes):
@@ -283,9 +426,10 @@ def scan_overuse(month=None, now=None):
     base = parse_month(month) or today
     first, last = month_bounds(base)
 
-    # 경계의 밤을 놓치지 않도록 양쪽으로 하루씩 넓게 읽는다.
+    # 앞은 SCAN_LOOKBACK_DAYS 만큼(달 이전에 시작된 체류를 살리려고), 뒤는 하루만 넓힌다.
+    # 밤 버킷은 minutes_by_night 가 그 달 것만 골라내므로 넓게 읽어도 결과가 번지지 않는다.
     logs = models.visit_logs_filter(
-        datetime.combine(first - timedelta(days=1), time.min),
+        datetime.combine(first - timedelta(days=SCAN_LOOKBACK_DAYS), time.min),
         datetime.combine(last + timedelta(days=1), time.min))
     by_car = defaultdict(list)
     for lg in logs:
@@ -293,7 +437,8 @@ def scan_overuse(month=None, now=None):
             by_car[lg.car_number].append(lg)
 
     month_nights = set(daterange(first, last))
-    regular = models.regular_car_numbers(today)
+    regular_map = models.regular_cars_map(today)
+    regular = set(regular_map)
 
     # 세대·신청자를 붙이기 위한 등록건. 지난달에 시작해 이 달까지 이어진 등록도
     # 잡히도록 조회 시작을 한 달 앞으로 당긴다.
@@ -334,10 +479,20 @@ def scan_overuse(month=None, now=None):
             "open_in": _open_now(car, first - timedelta(days=1), today),
             "is_regular": car in regular,
         }
+        # 정기등록 차량이면 세대·구분을 방문등록이 아니라 **정기등록 명단**에서 가져온다.
+        # 정기차량은 방문등록 이력이 없어 households 가 '미등록(호출 입차)' 로 나오기 때문.
+        rc = regular_map.get(car)
+        if rc:
+            row["group_name"] = rc.group_name
+            row["owner_name"] = rc.owner_name
+            row["regular_label"] = rc.label
+            if rc.household_label != "-":
+                row["households"] = rc.household_label
         (excluded if row["is_regular"] else rows).append(row)
 
     rows.sort(key=lambda x: -x["days"])
     excluded.sort(key=lambda x: -x["days"])
+    _open = open_stays(now=now)
     return {
         "period": f"{first.year}-{first.month:02d}",
         "first": first, "last": last,
@@ -346,6 +501,11 @@ def scan_overuse(month=None, now=None):
         "night_start": NIGHT_START, "night_end": NIGHT_END,
         "enforced": is_enforced(), "enforce_from": ENFORCE_FROM,
         "regular_count": len(regular),
+        "regular_groups": models.regular_cars_by_group(today),
+        # 상한에 걸린 미출차 건은 초과 목록에 안 뜨므로 따로 실어 보낸다.
+        "open_stays": _open,
+        "open_check": [r for r in _open if r["would_exceed"]],
+        "open_review_hours": OPEN_REVIEW_HOURS,
         "regular_synced_at": models.regular_cars_synced_at(),
         "stats": {"cars": len(by_car), "flagged": len(rows),
                   "excluded": len(excluded), "logs": len(logs),
