@@ -371,8 +371,9 @@ def overuse():
     return render_template("admin/overuse.html", months=months, **report)
 
 
-_OVERUSE_HEADER = ["순위", "차량번호", "실주차일수", "초과일수", "누적주차",
-                   "첫 주차일", "마지막 주차일", "최근 이벤트(KST)", "등록 세대"]
+_OVERUSE_HEADER = ["순위", "차량번호", "숙박일수", "초과일수", "야간 누적주차",
+                   "첫 숙박일", "마지막 숙박일", "최근 이벤트(KST)", "등록 세대",
+                   "시스템등록", "미출차"]
 
 
 @admin_bp.route("/overuse/export")
@@ -380,7 +381,8 @@ _OVERUSE_HEADER = ["순위", "차량번호", "실주차일수", "초과일수", 
 def export_overuse():
     report = usage.scan_overuse(month=request.args.get("month"))
     rows = [[i, r["car_number"], r["days"], r["over"], r["stay_text"],
-             r["first_day"], r["last_day"], _fmt(r["last_event"]), r["households"]]
+             r["first_day"], r["last_day"], _fmt(r["last_event"]), r["households"],
+             "예" if r["registered"] else "아니오", "예" if r["open_in"] else ""]
             for i, r in enumerate(report["rows"], 1)]
     return _csv_response(rows, _OVERUSE_HEADER, "parking_overuse_%s" % report["period"])
 

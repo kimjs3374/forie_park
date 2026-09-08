@@ -1,10 +1,18 @@
--- 실주차일수 월 한도(차량당 10일) + 정기등록 차량 동기화 (2026-09-08)
+-- 실주차일수(숙박) 월 한도(차량당 10일) + 정기등록 차량 동기화 (2026-09-08)
 -- Supabase 대시보드 → SQL Editor 에 붙여넣고 Run.
 --
--- 실주차일수 자체는 이미 있는 parking_visit_logs 로 계산하므로 새 컬럼이 필요 없다.
--- 여기서 만드는 것은 두 가지뿐이다.
---   1) parking_regular_cars   — 넥스파 관제 DB의 정기(월주차) 차량 거울. 초과 알림에서 제외할 명단.
---   2) parking_overuse_alerts — 초과 알림 발송 이력. 같은 차량을 매일 다시 알리지 않기 위한 것.
+-- 숙박일수 자체는 이미 있는 parking_visit_logs 로 계산하므로 새 컬럼이 필요 없다.
+-- 여기서 하는 일은 셋이다.
+--   1) parking_visit_logs.registration_id 를 nullable 로 — 세대호출·경비실 호출로
+--      들어온 미등록 차량의 입출차도 기록해야 한다(규약 주의사항: 한도 동일 적용).
+--   2) parking_regular_cars   — 넥스파 관제 DB의 정기(월주차) 차량 거울. 초과 알림에서 제외할 명단.
+--   3) parking_overuse_alerts — 초과 알림 발송 이력. 같은 차량을 매일 다시 알리지 않기 위한 것.
+
+-- ---------------------------------------------------------- 미등록 입차 로그 허용
+-- 지금까지는 방문등록에 매칭되지 않는 이벤트를 에이전트가 버렸다. 규약상 세대호출·
+-- 경비실 호출 입차도 같은 10일 한도를 받으므로 등록 없이도 남길 수 있어야 한다.
+alter table public.parking_visit_logs
+    alter column registration_id drop not null;
 
 -- ---------------------------------------------------------------- 정기등록 차량
 create table if not exists public.parking_regular_cars (

@@ -124,26 +124,29 @@ def visit_new():
                              f"등록되어 있습니다. 기존 등록이 끝나거나 취소된 뒤에 다시 등록할 수 있습니다.")
                 return render_template("main/visit_new.html", form=request.form, block_msg=block_msg)
 
-        # 월 실주차일수 한도(차량 기준). 남은 일수가 모자라면 되는 데까지만 등록한다
+        # 월 숙박일수 한도(차량 기준). 남은 일수가 모자라면 되는 데까지만 등록한다
         # — 8일 쓴 차가 3일을 신청하면 2일로 잘린다.
-        entry_date, exit_date = entry_time.date(), exit_time.date()
-        last_allowed, quotas = usage.plan_registration(car_number, entry_date, exit_date)
-        if last_allowed is None:
-            q = quotas.get((entry_date.year, entry_date.month), {})
+        # 낮에만 머무는 기간(밤 20시를 넘지 않는 신청)은 한도와 무관해 그대로 통과한다.
+        plan = usage.plan_registration(car_number, entry_time, exit_time)
+        nights, allowed = plan["nights"], plan["allowed"]
+        if nights and not allowed:
+            first_night = nights[0]
+            q = plan["quotas"].get((first_night.year, first_night.month), {})
             block_msg = (
-                f"이 차량({car_number})은 {entry_date.month}월 주차 가능일수 "
+                f"이 차량({car_number})은 {first_night.month}월 주차 가능일수 "
                 f"{usage.MONTHLY_LIMIT_DAYS}일을 모두 사용했습니다"
                 f"(사용 {q.get('used_days', usage.MONTHLY_LIMIT_DAYS)}일). "
-                f"매월 1일에 초기화되며, 장기 주차가 필요하면 관리사무소로 문의하세요.")
+                f"매월 1일에 초기화되며, 아이돌봄·병간호·학습지 등 사유가 있거나 "
+                f"주간에만 주차하는 경우 관리사무소를 통해 별도로 등록하실 수 있습니다.")
             return render_template("main/visit_new.html", form=request.form,
                                    block_msg=block_msg)
-        if last_allowed < exit_date:
+        if allowed and allowed[-1] < nights[-1]:
             # 신청한 기간을 말없이 줄이면 방문객이 못 나가는 사고가 난다. 반드시 알린다.
-            exit_time = datetime.combine(last_allowed, time(23, 59))
-            q = quotas.get((last_allowed.year, last_allowed.month), {})
-            flash(f"{last_allowed.month}월 주차 가능일수가 "
+            exit_time = datetime.combine(allowed[-1], time(23, 59))
+            q = plan["quotas"].get((allowed[-1].year, allowed[-1].month), {})
+            flash(f"{allowed[-1].month}월 주차 가능일수가 "
                   f"{q.get('limit', usage.MONTHLY_LIMIT_DAYS) - q.get('used_days', 0)}일 남아 "
-                  f"출차일을 {last_allowed.strftime('%m월 %d일')}로 조정했습니다.", "warning")
+                  f"출차일을 {allowed[-1].strftime('%m월 %d일')}로 조정했습니다.", "warning")
 
         reg = models.visits_create({
             "user_id": current_user.id,

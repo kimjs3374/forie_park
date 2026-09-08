@@ -15,6 +15,12 @@
   .seg .opt.off{ opacity:.4; cursor:not-allowed; }
   .quota{ display:none; margin-top:8px; font-size:.9rem; font-weight:700; text-align:center; }
   .quota.on{ display:block; }
+  .rulebox{ background:#f8fafc; border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:10px; font-size:.85rem; font-weight:600;
+    color:var(--muted); line-height:1.65; }
+  .rulebox b{ color:var(--ink); }
+  .rulebox ul{ margin:8px 0 0; padding-left:18px; }
+  .rulebox li{ margin-top:4px; }
   .datesel{
     width:100%; height:60px; font-size:1.15rem; font-weight:700; color:var(--ink);
     border:2px solid var(--line); border-radius:14px; padding:0 34px 0 14px; background:#f8fafc;
@@ -130,12 +136,20 @@
       <!-- 방문기간 (최대 3일, 하루 종일) -->
       <div class="field">
         <label>방문기간 <span style="color:var(--muted); font-weight:600;">(최대 3일 · 하루 종일 통과)</span></label>
-        <div style="font-size:.85rem; color:var(--muted); font-weight:600; margin-bottom:8px;">
+        <div class="rulebox">
           {% if quota_enforced %}
-          한 차량이 한 달에 쓸 수 있는 주차일수는 {{ quota_limit }}일이며 매월 1일에 초기화됩니다.
+          <b>주차일수는 숙박 기준입니다.</b> 밤 8시~다음날 오전 7시 사이에 30분을 초과해
+          주차하면 1일이 부과되며, 차량당 <b>월 {{ quota_limit }}일</b>까지(매월 1일 초기화) 등록할 수 있습니다.
           {% else %}
-          {{ quota_from.strftime('%Y년 %-m월 %-d일') }}부터 차량당 월 {{ quota_limit }}일 주차 한도가 적용됩니다.
+          <b>{{ quota_from.strftime('%Y년 %-m월 %-d일') }}부터</b> 차량당 월 {{ quota_limit }}일 숙박 한도가 적용됩니다.
+          밤 8시~다음날 오전 7시 사이에 30분을 초과해 주차하면 1일이 부과됩니다.
           {% endif %}
+          <ul>
+            <li>밤 8시~오전 7시 사이 <b>30분 이내 출차</b>는 회차차량으로 보아 부과되지 않습니다(중고거래·배달 등).</li>
+            <li><b>주간에만 주차</b>하는 경우에는 부과되지 않습니다. 아이돌봄·병간호·학습지 등 주간 정기 출입은
+                관리사무소를 통해 별도로 등록해 주세요.</li>
+            <li>세대호출·경비실 호출로 입차한 차량도 동일하게 집계됩니다.</li>
+          </ul>
         </div>
         <div class="seg" id="outDaySeg">
           <div class="opt on" data-plus="0">당일</div>
@@ -220,13 +234,13 @@
     quotaHint.classList.add('on');
     if(!ENFORCED){
       quotaHint.style.color='var(--muted)';
-      quotaHint.textContent=`이번 달 이 차량의 주차일수 ${used}일 · 한도는 {{ quota_from.strftime('%-m월 %-d일') }}부터 적용`;
+      quotaHint.textContent=`이번 달 이 차량의 숙박일수 ${used}일 · 한도는 {{ quota_from.strftime('%-m월 %-d일') }}부터 적용`;
     } else if(remain<=0){
       quotaHint.style.color='var(--danger)';
       quotaHint.textContent=`이번 달 주차 가능일수 {{ quota_limit }}일을 모두 사용했습니다`;
     } else {
       quotaHint.style.color = remain<=2? '#b45309' : 'var(--muted)';
-      quotaHint.textContent=`이번 달 남은 주차일수 ${remain}일 / {{ quota_limit }}일`;
+      quotaHint.textContent=`이번 달 남은 주차일수 ${remain}일 / {{ quota_limit }}일 (사용 ${used}일)`;
     }
   }
 

@@ -66,11 +66,18 @@ def send_overuse_alert(period, rows, limit):
     """
     if not rows:
         return False
-    lines = ["⚠️ 실주차일수 %d일 초과 (%s)" % (limit, period), ""]
+    lines = ["⚠️ 실주차일수(숙박) %d일 초과 (%s)" % (limit, period), ""]
     for r in rows:
-        lines.append("· %s — %d일 (한도 +%d) / %s"
-                     % (r["car_number"], r["days"], r["over"], r["households"]))
+        tag = ""
+        if not r.get("registered"):
+            tag += " [미등록]"       # 세대호출·경비실 호출로 입차
+        if r.get("open_in"):
+            tag += " [미출차]"       # 관제 누락 가능 — 확인 필요
+        lines.append("· %s — %d박 (한도 +%d) / %s%s"
+                     % (r["car_number"], r["days"], r["over"], r["households"], tag))
     lines.append("")
+    lines.append("밤 8시~다음날 오전 7시 사이 30분 초과 주차를 1일로 셉니다.")
     lines.append("정기등록 차량은 제외한 목록입니다.")
+    lines.append("[미출차]는 출차 로그가 없어 주차중으로 계산된 차량이라 확인이 필요합니다.")
     lines.append("관리자 페이지 > 실주차일수 초과 차량 에서 상세를 확인하세요.")
     return _send("\n".join(lines))
