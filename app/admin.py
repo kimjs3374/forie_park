@@ -35,13 +35,13 @@ def dashboard():
     # 계정·명부는 통합 관리(forie.kr/admin)의 몫이다. 여기서는 방문차량만 센다.
     visit_count = models.visits_count(status="active")
     try:
-        suspect_count = analytics.scan()["stats"]["flagged"]
+        suspect_count = analytics.scan_cached()["stats"]["flagged"]
     except Exception:
         # 분석이 실패해도 대시보드 자체는 열려야 한다.
         current_app.logger.exception("의심세대 집계 실패")
         suspect_count = 0
     try:
-        overuse_count = usage.scan_overuse()["stats"]["flagged"]
+        overuse_count = usage.scan_overuse_cached()["stats"]["flagged"]
     except Exception:
         current_app.logger.exception("실주차일수 초과 집계 실패")
         overuse_count = 0
@@ -333,7 +333,9 @@ def suspects():
     """부정사용(상시주차 우회) 의심 세대 목록."""
     date_from = _parse_date(request.args.get("from"))
     date_to = _parse_date(request.args.get("to"))
-    report = analytics.scan(date_from, date_to)
+    # 기간을 안 좁힌 첫 화면은 대시보드 배지와 같은 집계다 — 캐시를 함께 쓴다.
+    report = (analytics.scan_cached() if not (date_from or date_to)
+              else analytics.scan(date_from, date_to))
     return render_template(
         "admin/suspects.html",
         households=report["households"],
@@ -365,7 +367,7 @@ def export_suspects():
 @admin_required
 def overuse():
     """실주차일수(관제 입출차 기준) 월 한도 초과 차량."""
-    report = usage.scan_overuse(month=request.args.get("month"))
+    report = usage.scan_overuse_cached(month=request.args.get("month"))
     # 달 선택기 — 이번 달부터 12개월 뒤로.
     base = usage.today_kst().replace(day=1)
     months = []

@@ -898,6 +898,28 @@ def visit_logs_by_car(car_number, date_from=None, date_to=None):
         return []
 
 
+def visits_households_by_cars(car_numbers, chunk=80):
+    """차량번호 → "N동 M호" 를 한 번에 찾는다. 최근 등록 기준.
+
+    차마다 따로 물으면 왕복이 그 수만큼 늘어난다 — 미출차 점검 목록 17대에
+    1.7초가 여기서 나갔다. PostgREST 의 in.() 은 URL 길이 제한이 있어 끊어 보낸다.
+    """
+    cars = [c for c in dict.fromkeys(car_numbers) if c]
+    out = {}
+    for i in range(0, len(cars), chunk):
+        part = [c.replace('"', "") for c in cars[i:i + chunk]]
+        rows = sb.fetch_rows(T_VISITS, [
+            ("select", "car_number,dong,ho,entry_time"),
+            ("car_number", "in.(%s)" % ",".join('"%s"' % c for c in part)),
+            ("status", "eq.active"),
+            ("order", "entry_time.desc")])
+        for r in rows:
+            car = r.get("car_number")
+            if car and car not in out and r.get("dong") and r.get("ho"):
+                out[car] = f"{r['dong']}동 {r['ho']}호"
+    return out
+
+
 # ---------------------------------------------------------- 정기등록 차량(관제 동기화)
 # 넥스파 관제 DB의 정기(월주차) 차량을 관리실 에이전트가 밀어 넣는 거울 테이블.
 # 이 앱은 읽기만 한다 — 실주차일수 초과 알림에서 상시 주차가 정상인 차를 빼기 위해서다.

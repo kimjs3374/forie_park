@@ -23,6 +23,7 @@
 집계 대상은 시스템 등록 차량만이 아니다. 세대호출·경비실 호출로 들어온 차량도
 관제 로그에 남으면 같은 한도를 적용한다(규약 주의사항).
 """
+import time as _time_module
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -312,7 +313,7 @@ OPEN_REVIEW_DAYS = 45
 SCAN_LOOKBACK_DAYS = 45
 
 
-def open_stays(now=None, days=OPEN_REVIEW_DAYS):
+def open_stays(now=None, days=OPEN_REVIEW_DAYS, logs=None):
     """출차 로그 없이 남아 있는 입차 목록.
 
     ── 이 목록을 사람이 다 확인할 필요는 없다 ──────────────────────────────
@@ -333,7 +334,14 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS):
     now = now or datetime.now(timezone.utc)
     today = _kst(now).date()
     since = datetime.combine(today - timedelta(days=days), time.min)
-    logs = models.visit_logs_filter(since, datetime.combine(today + timedelta(days=1), time.min))
+    if logs is None:
+        logs = models.visit_logs_filter(
+            since, datetime.combine(today + timedelta(days=1), time.min))
+    else:
+        # 호출부가 이미 읽어 둔 로그를 넘겨준 경우. 그 창은 이쪽보다 넓을 수 있으므로
+        # 여기서 다시 잘라, 로그를 두 번 읽지 않으면서 결과는 같게 둔다.
+        logs = [lg for lg in logs
+                if lg.event_time and _kst(lg.event_time) >= since]
 
     by_car = defaultdict(list)
     for lg in logs:
@@ -341,7 +349,9 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS):
             by_car[lg.car_number].append(lg)
 
     regular_map = models.regular_cars_map(today)
-    out = []
+
+    # 대상 차량을 먼저 추린 뒤 세대를 한 번에 조회한다. 차마다 물으면 그만큼 왕복이 는다.
+    pending = []
     for car, items in by_car.items():
         evs = sorted((lg for lg in items if lg.event_time), key=lambda x: x.event_time)
         if not evs or not evs[-1].is_in:
@@ -350,6 +360,14 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS):
         hours = (now - entered).total_seconds() / 3600.0
         if hours < OPEN_REVIEW_HOURS:
             continue                      # 아직 정상 체류 범위 — 주차중일 뿐이다
+        pending.append((car, items, entered, hours))
+
+    need = [car for car, _, _, _ in pending
+            if not (regular_map.get(car) and regular_map[car].household_label != "-")]
+    household_map = models.visits_households_by_cars(need) if need else {}
+
+    out = []
+    for car, items, entered, hours in pending:
         rc = regular_map.get(car)
         counted = len(parked_nights(items, now=now))
         # 정기차량은 상시 주차가 정상이라 한도 대상이 아니다 — 확인할 이유가 없다.
@@ -370,24 +388,35 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS):
             "is_regular": rc is not None,
             "group_name": rc.group_name if rc else None,
             "household": (rc.household_label if rc and rc.household_label != "-"
-                          else _household_of(car)),
+                          else household_map.get(car, "미등록(호출 입차)")),
         })
     out.sort(key=lambda x: (not x["would_exceed"], x["entered_at"]))
     return out
 
 
-def _household_of(car_number):
-    """방문등록 이력에서 세대를 찾는다. 없으면 '미등록(호출 입차)'."""
-    try:
-        for r in models.visits_active_by_car(car_number):
-            if r.dong and r.ho:
-                return f"{r.dong}동 {r.ho}호"
-    except Exception:
-        pass
-    return "미등록(호출 입차)"
 
 
 # ------------------------------------------------------------------ 한도 초과 감시
+
+# 관리 화면 전용 짧은 캐시. 대시보드는 배지 숫자 하나를 얻으려고 이 스캔을 통째로
+# 돌리는데, 로그 7천 건을 진입할 때마다 다시 읽으면 관리 화면 문이 몇 초씩 걸린다.
+# 집계 대상이 관제 로그라 분 단위로 뒤집힐 값도 아니다.
+# 알림 배치(scripts/notify_overuse.py)는 scan_overuse 를 직접 부른다 — 보낼지 말지는
+# 항상 그 순간의 값으로 판단해야 하므로 캐시를 태우지 않는다.
+_SCAN_TTL_SECONDS = 120
+_scan_cache = {}
+
+
+def scan_overuse_cached(month=None):
+    key = month or ""
+    hit = _scan_cache.get(key)
+    if hit and (_time_module.monotonic() - hit[0]) < _SCAN_TTL_SECONDS:
+        return hit[1]
+    report = scan_overuse(month=month)
+    _scan_cache[key] = (_time_module.monotonic(), report)
+    return report
+
+
 
 def _stay_text(minutes):
     h, m = divmod(int(minutes), 60)
@@ -492,7 +521,9 @@ def scan_overuse(month=None, now=None):
 
     rows.sort(key=lambda x: -x["days"])
     excluded.sort(key=lambda x: -x["days"])
-    _open = open_stays(now=now)
+    # 미출차 점검은 '지금 남아 있는 차' 이야기라 이번 달을 볼 때만 뜻이 있다.
+    # 이 달을 볼 때는 위에서 읽은 로그가 최근 45일을 이미 덮으므로 그대로 넘긴다.
+    _open = open_stays(now=now, logs=logs) if first == today.replace(day=1) else []
     return {
         "period": f"{first.year}-{first.month:02d}",
         "first": first, "last": last,
