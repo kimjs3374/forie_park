@@ -41,6 +41,10 @@ class Config:
     LOOKUP_PIN = os.environ.get("LOOKUP_PIN", "")
     # PIN 을 한 번 넣으면 이 시간만큼 그 단말에서 다시 묻지 않는다(교대 근무 1회분).
     LOOKUP_SESSION_HOURS = int(os.environ.get("LOOKUP_SESSION_HOURS", 12))
+    # 경비실 QR 전용 토큰. PIN 과 **다른 값**이어야 한다 — QR 주소에 PIN 을 실으면
+    # 주소창을 보는 사람에게 PIN 이 그대로 읽힌다. 토큰이 샜다고 판단되면 PIN 은
+    # 그대로 두고 이 값만 갈아 QR 을 다시 인쇄한다.
+    LOOKUP_QR_SECRET = os.environ.get("LOOKUP_QR_SECRET", "")
 
     # 세션 쿠키 보안 (Cloudflare 뒤 HTTPS 전용)
     SESSION_COOKIE_HTTPONLY = True

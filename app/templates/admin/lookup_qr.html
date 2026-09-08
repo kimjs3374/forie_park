@@ -20,6 +20,11 @@
   조회용 PIN(<code>LOOKUP_PIN</code>)이 서버에 설정되지 않았습니다. 설정 전에는 경비실 화면이 열리지 않습니다.
 </div>
 {% endif %}
+{% if not qr_set %}
+<div class="flash warning">
+  QR 토큰(<code>LOOKUP_QR_SECRET</code>)이 설정되지 않아 QR 을 만들 수 없습니다. 아래 주소와 PIN 을 직접 안내해 주세요.
+</div>
+{% endif %}
 
 <div class="card-k" style="text-align:center;">
   <div class="stack">
@@ -51,7 +56,8 @@
     </div>
 
     <p class="sub" style="font-size:.85rem; line-height:1.7;">
-      이 종이는 경비실 안에만 두세요. QR 에는 PIN 이 들어 있어 찍은 사람은 누구나 조회할 수 있습니다.<br>
+      이 종이는 경비실 안에만 두세요. 찍은 사람은 누구나 조회할 수 있습니다.<br>
+      QR 에는 PIN 이 들어 있지 않아, 찍어도 주소창에 PIN 이 드러나지 않습니다.<br>
       모든 조회는 시각과 함께 기록됩니다.
     </p>
   </div>

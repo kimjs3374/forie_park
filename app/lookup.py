@@ -5,13 +5,13 @@
 연다. 대신 신원이 계정으로 남지 않으므로, 조회 시각을 빠짐없이 기록해
 근무자 배치표와 대조해 조회자를 특정한다(models.lookup_log_add).
 
-경비실에는 PIN 이 박힌 QR(관리자 > 경비실 QR 발급)을 붙여 둔다. PIN 은
-주소의 **프래그먼트**(`/lookup/#p=...`)에 실린다 — 쿼리스트링에 실으면 nginx 와
-Cloudflare 액세스 로그에 요청줄 그대로 적혀 로그를 볼 수 있는 사람 모두에게
-PIN 이 새기 때문이다. 프래그먼트는 브라우저가 서버로 보내지 않으므로 어떤
-로그에도, Referer 에도 남지 않는다. 화면의 스크립트가 그 값을 읽어 PIN 폼을
-대신 제출하고 주소에서 즉시 지운다. 스크립트가 막힌 단말에서는 인쇄물에 적힌
-PIN 을 직접 입력하면 된다.
+경비실에는 QR(관리자 > 경비실 QR 발급)을 붙여 둔다. QR 이 나르는 것은 PIN 이
+아니라 별개의 무작위 토큰(LOOKUP_QR_SECRET)이다 — PIN 을 주소에 실으면 형태를
+어떻게 바꾸든 주소창을 보는 사람에게 그대로 읽힌다. 토큰은 주소의 **프래그먼트**
+(`/lookup/#k=...`)에 실린다. 프래그먼트는 브라우저가 서버로 보내지 않으므로
+nginx·Cloudflare 액세스 로그에도, Referer 에도 남지 않는다. 화면의 스크립트가
+그 값을 읽어 대신 제출하고 주소에서 즉시 지운다. 스크립트가 막힌 단말에서는
+인쇄물에 적힌 PIN 을 직접 입력하면 되므로 QR 이 안 통해도 업무는 막히지 않는다.
 
 노출 정보는 **세대 · 방문기간 · 상태**까지다. 방문자 연락처·방문사유는 보여
 주지 않는다 — 입차 허용 판단에 필요 없는데 경비실 화면에 상시 떠 있게 된다.
@@ -52,6 +52,10 @@ def _pin():
     return (current_app.config.get("LOOKUP_PIN") or "").strip()
 
 
+def _qr_secret():
+    return (current_app.config.get("LOOKUP_QR_SECRET") or "").strip()
+
+
 def _authed():
     until = session.get(SESSION_KEY)
     return bool(until) and float(until) > time.time()
@@ -84,7 +88,7 @@ def index():
                                locked=True), 503
 
     # 옛 QR(?pin=...)이 남아 있으면 값은 쓰지 않고 주소만 정리해 돌려보낸다.
-    # 로그에 이미 적힌 뒤라 그 값으로 인증해 주는 것은 유출을 눈감아 주는 셈이다.
+    # 이미 액세스 로그에 적힌 값으로 인증해 주는 것은 유출을 눈감아 주는 셈이다.
     if request.args.get("pin") is not None:
         return redirect(url_for("lookup.index"))
 
@@ -93,6 +97,21 @@ def index():
             models.lookup_log_add("pin_fail", ip=ip)
             return render_template("lookup/pin.html",
                                    error="입력 시도가 많습니다. 10분 뒤 다시 시도하세요."), 429
+        # QR 이 실어 온 토큰(k)과 사람이 친 PIN(pin)은 다른 비밀이다. 둘 다 같은
+        # 시도 제한을 받되, 어느 쪽으로 들어왔는지는 기록에 남겨 둔다.
+        qr_given = (request.form.get("k") or "").strip()
+        secret = _qr_secret()
+        if qr_given:
+            if secret and hmac.compare_digest(qr_given, secret):
+                _grant()
+                models.lookup_log_add("qr_ok", ip=ip)
+                return redirect(url_for("lookup.index"))
+            _record_fail(ip)
+            models.lookup_log_add("qr_fail", ip=ip)
+            return render_template("lookup/pin.html",
+                                   error="QR 이 만료되었거나 올바르지 않습니다. "
+                                         "PIN 을 직접 입력해 주세요."), 401
+
         given = (request.form.get("pin") or "").strip()
         if hmac.compare_digest(given, _pin()):
             _grant()

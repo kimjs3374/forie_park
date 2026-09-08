@@ -459,18 +459,22 @@ def lookup_qr():
     빈 칸으로 나온다. SVG 라 확대·인쇄에도 깨지지 않는다.
     """
     pin = (current_app.config.get("LOOKUP_PIN") or "").strip()
+    secret = (current_app.config.get("LOOKUP_QR_SECRET") or "").strip()
     base_url = url_for("lookup.index", _external=True)
-    # PIN 은 프래그먼트에 싣는다. 쿼리스트링은 nginx·Cloudflare 액세스 로그에
-    # 요청줄 그대로 적혀, 로그를 볼 수 있는 사람 모두에게 PIN 이 새어 나간다.
-    qr_url = base_url + ("#p=" + quote(pin, safe="") if pin else "")
+    # QR 에는 PIN 이 아니라 별개의 무작위 토큰을 싣는다. PIN 을 주소에 실으면
+    # 주소창을 보는 사람에게 그대로 읽히고, 쿼리스트링이면 액세스 로그에도 남는다.
+    # 프래그먼트(#)는 서버로 전송되지 않아 로그·Referer 어디에도 남지 않는다.
+    qr_url = base_url + ("#k=" + quote(secret, safe="") if secret else "")
 
     qr_svg = None
-    try:
-        import segno
-        qr_svg = Markup(segno.make(qr_url, error="m").svg_inline(
-            scale=6, border=2, dark="#0f172a"))
-    except Exception:
-        current_app.logger.exception("경비실 QR 생성 실패")
+    if secret:
+        try:
+            import segno
+            qr_svg = Markup(segno.make(qr_url, error="m").svg_inline(
+                scale=6, border=2, dark="#0f172a"))
+        except Exception:
+            current_app.logger.exception("경비실 QR 생성 실패")
 
     return render_template("admin/lookup_qr.html", pin=pin, pin_set=bool(pin),
-                           base_url=base_url, qr_url=qr_url, qr_svg=qr_svg)
+                           qr_set=bool(secret), base_url=base_url,
+                           qr_url=qr_url, qr_svg=qr_svg)

@@ -33,18 +33,20 @@
     </div>
   </div>
 </div>
-{# QR 은 PIN 을 주소의 프래그먼트(#p=...)로 실어 온다. 프래그먼트는 서버로
-   전송되지 않아 액세스 로그·Referer 어디에도 남지 않는다. 여기서 읽어 폼을
-   대신 제출하고, 주소에서는 곧바로 지운다. 스크립트가 막힌 단말에서는
-   인쇄물의 PIN 을 직접 입력하면 되므로 화면은 그대로 쓸 수 있다. #}
+{# QR 은 PIN 이 아니라 별개의 무작위 토큰을 프래그먼트(#k=...)로 실어 온다.
+   PIN 을 주소에 실으면 형태를 어떻게 바꾸든 주소창을 보는 사람에게 읽힌다.
+   프래그먼트는 서버로 전송되지 않아 액세스 로그·Referer 에도 남지 않는다.
+   여기서 읽어 폼을 대신 제출하고 주소에서는 곧바로 지운다. 스크립트가 막힌
+   단말에서는 인쇄물의 PIN 을 직접 입력하면 되므로 화면은 그대로 쓸 수 있다. #}
 <script>
 (function(){
-  var m = /^#p=([0-9A-Za-z._~-]{1,32})$/.exec(location.hash || '');
+  var m = /^#k=([0-9A-Za-z._~-]{8,64})$/.exec(location.hash || '');
   if(!m) return;
   var form = document.querySelector('form[method="post"]');
-  var box = form && form.querySelector('input[name="pin"]');
-  if(!form || !box) return;
-  box.value = m[1];
+  if(!form) return;
+  var box = document.createElement('input');
+  box.type = 'hidden'; box.name = 'k'; box.value = m[1];
+  form.appendChild(box);
   try{ history.replaceState(null, '', location.pathname); }catch(e){ location.hash = ''; }
   form.submit();
 })();
