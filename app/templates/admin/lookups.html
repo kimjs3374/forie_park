@@ -38,16 +38,26 @@
         {% if lg.kind == 'search' %}
           검색어 <b style="color:var(--ink);">{{ lg.query }}</b> · 결과 {{ lg.result_count }}건
         {% elif lg.kind == 'pin_ok' %}
-          PIN 인증 성공
-        {% else %}
+          PIN 직접입력 인증 성공
+        {% elif lg.kind == 'qr_ok' %}
+          QR 인증 성공
+        {% elif lg.kind == 'pin_fail' %}
           PIN 인증 실패
+        {% elif lg.kind == 'qr_fail' %}
+          QR 인증 실패
+        {% elif lg.kind == 'pin_change' %}
+          관리자가 PIN 을 변경
+        {% else %}
+          {{ lg.kind }}
         {% endif %}
         · {{ lg.ip or '-' }}
       </div>
     </div>
-    {% if lg.kind == 'pin_fail' %}
+    {% if lg.kind in ('pin_fail', 'qr_fail') %}
       <span class="badge-k b-cancel" style="background:#fee2e2; color:#991b1b;">실패</span>
-    {% elif lg.kind == 'pin_ok' %}
+    {% elif lg.kind == 'pin_change' %}
+      <span class="badge-k b-wait" style="background:#e0e7ff; color:#3730a3;">설정변경</span>
+    {% elif lg.kind in ('pin_ok', 'qr_ok') %}
       <span class="badge-k b-wait">인증</span>
     {% elif lg.result_count %}
       <span class="badge-k b-ok">조회</span>

@@ -17,6 +17,8 @@ nginx·Cloudflare 액세스 로그에도, Referer 에도 남지 않는다. 화�
 주지 않는다 — 입차 허용 판단에 필요 없는데 경비실 화면에 상시 떠 있게 된다.
 """
 import hmac
+import json
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -48,7 +50,49 @@ def client_ip():
     return request.remote_addr or ""
 
 
+# 바뀐 PIN 은 instance/ 아래 파일에 둔다. .env 는 서비스 재시작이 있어야 반영되고
+# 웹 프로세스가 고쳐 쓸 수도 없어서, 관리자가 화면에서 바로 바꾸려면 다른 자리가
+# 필요하다. 파일이 있으면 그 값이, 없으면 .env 의 초기값이 쓰인다.
+PIN_STORE = "lookup_pin.json"
+
+
+def _store_path():
+    return os.path.join(current_app.instance_path, PIN_STORE)
+
+
+def read_pin_store():
+    """{"pin", "updated_at", "updated_by"} 또는 None(아직 안 바꿈)."""
+    try:
+        with open(_store_path(), encoding="utf-8") as fp:
+            data = json.load(fp)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get("pin") else None
+
+
+def write_pin_store(pin, who):
+    """임시 파일에 쓰고 통째로 갈아 끼운다.
+
+    제자리에서 고쳐 쓰면 쓰는 도중에 읽힌 요청이 반쪽 파일을 만나 PIN 이
+    통째로 사라진 것처럼 보이고, 그 순간 경비실 화면이 열리지 않는다.
+    """
+    path = _store_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    payload = {"pin": str(pin), "updated_at": datetime.now(timezone.utc).isoformat(),
+               "updated_by": who or ""}
+    with open(tmp, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, ensure_ascii=False)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
+    return payload
+
+
 def _pin():
+    """지금 통하는 PIN. 관리자가 바꿨으면 그 값, 아니면 .env 의 초기값."""
+    data = read_pin_store()
+    if data:
+        return str(data["pin"]).strip()
     return (current_app.config.get("LOOKUP_PIN") or "").strip()
 
 

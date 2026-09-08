@@ -1,6 +1,7 @@
 """관리사무소(admin)용 화면 — 가입 승인 / 반려 및 전체 방문등록 조회."""
 import csv
 import io          # CSV 내보내기에서 쓴다
+import re
 from urllib.parse import quote
 
 from markupsafe import Markup
@@ -458,7 +459,8 @@ def lookup_qr():
     붙는 종이라, 외부 CDN 스크립트에 매달아 두면 그 CDN 이 흔들리는 날 인쇄가
     빈 칸으로 나온다. SVG 라 확대·인쇄에도 깨지지 않는다.
     """
-    pin = (current_app.config.get("LOOKUP_PIN") or "").strip()
+    from .lookup import read_pin_store, _pin as current_pin
+    pin = current_pin()
     secret = (current_app.config.get("LOOKUP_QR_SECRET") or "").strip()
     base_url = url_for("lookup.index", _external=True)
     # QR 에는 PIN 이 아니라 별개의 무작위 토큰을 싣는다. PIN 을 주소에 실으면
@@ -477,4 +479,36 @@ def lookup_qr():
 
     return render_template("admin/lookup_qr.html", pin=pin, pin_set=bool(pin),
                            qr_set=bool(secret), base_url=base_url,
-                           qr_url=qr_url, qr_svg=qr_svg)
+                           qr_url=qr_url, qr_svg=qr_svg,
+                           pin_meta=read_pin_store())
+
+
+# PIN 은 경비원이 외워서 치는 값이라 숫자로 제한한다. 4자리는 너무 짧아 6자리
+# 이상을 권하지만, 기존 운영 번호를 그대로 옮겨 쓸 수 있게 4자리부터 허용한다.
+PIN_RE = re.compile(r"^\d{4,12}$")
+
+
+@admin_bp.route("/lookup-pin", methods=["POST"])
+@admin_required
+def lookup_pin_change():
+    """경비실 PIN 교체. QR 토큰은 건드리지 않는다 — 둘은 별개의 비밀이다."""
+    from .lookup import write_pin_store, client_ip
+    new_pin = (request.form.get("pin") or "").strip()
+    confirm = (request.form.get("pin_confirm") or "").strip()
+
+    if not PIN_RE.match(new_pin):
+        flash("PIN 은 숫자 4~12자리로 입력하세요.", "danger")
+    elif new_pin != confirm:
+        flash("확인용 PIN 이 일치하지 않습니다.", "danger")
+    else:
+        try:
+            write_pin_store(new_pin, getattr(current_user, "name", ""))
+        except OSError:
+            current_app.logger.exception("PIN 저장 실패")
+            flash("PIN 을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "danger")
+        else:
+            # 누가 언제 바꿨는지 조회기록에 남긴다. 값 자체는 남기지 않는다.
+            models.lookup_log_add("pin_change", ip=client_ip())
+            flash("PIN 을 변경했습니다. 경비실에 새 번호를 알려 주세요. "
+                  "이미 열려 있는 경비실 화면은 그대로 쓸 수 있습니다.", "success")
+    return redirect(url_for("admin.lookup_qr"))

@@ -2,12 +2,20 @@
 {% block title %}관리 - 경비실 QR 발급{% endblock %}
 {% block content %}
 <style>
+  /* 인쇄물은 경비실 벽에 붙는다. PIN 이 찍혀 나가면 그 종이를 보는 사람 누구나
+     조회할 수 있게 되므로, PIN 은 화면에서만 보이고 인쇄에서는 빠진다.
+     QR 은 PIN 을 담고 있지 않아 그대로 인쇄해도 된다. */
   @media print{
     body{ background:#fff !important; }
-    .topbar, .section-title, .noprint, .flash{ display:none !important; }
+    .topbar, .section-title, .noprint, .flash, .screen-only{ display:none !important; }
+    .print-only{ display:block !important; }
     .kiosk{ padding:0 !important; }
     .card-k{ box-shadow:none !important; border:1px solid #cbd5e1; }
   }
+  .print-only{ display:none; }
+  .pinbox{ background:#f8fafc; border:2px dashed var(--line); border-radius:14px; padding:16px; }
+  .pinlab{ color:var(--muted); font-weight:700; font-size:.85rem; }
+  .pinval{ font-size:1.9rem; font-weight:800; letter-spacing:.2em; margin-top:2px; }
 </style>
 
 <div class="section-title noprint">
@@ -17,7 +25,7 @@
 
 {% if not pin_set %}
 <div class="flash danger">
-  조회용 PIN(<code>LOOKUP_PIN</code>)이 서버에 설정되지 않았습니다. 설정 전에는 경비실 화면이 열리지 않습니다.
+  조회용 PIN 이 설정되지 않았습니다. 설정 전에는 경비실 화면이 열리지 않습니다.
 </div>
 {% endif %}
 {% if not qr_set %}
@@ -38,7 +46,7 @@
         {% if qr_svg %}{{ qr_svg }}{% else %}
         <div style="width:198px; height:198px; display:flex; align-items:center; justify-content:center;
                     color:var(--danger); font-weight:700; font-size:.9rem; text-align:center; line-height:1.5;">
-          QR 을 만들지 못했습니다.<br>아래 주소와 PIN 을 직접 안내해 주세요.
+          QR 을 만들지 못했습니다.<br>아래 주소를 직접 안내해 주세요.
         </div>
         {% endif %}
       </div>
@@ -48,11 +56,19 @@
       휴대폰 카메라로 QR 을 찍으면 바로 열립니다
     </div>
 
-    <div style="background:#f8fafc; border:2px dashed var(--line); border-radius:14px; padding:16px;">
-      <div style="color:var(--muted); font-weight:700; font-size:.85rem;">직접 접속 주소</div>
+    <div class="pinbox">
+      <div class="pinlab">직접 접속 주소</div>
       <div style="word-break:break-all; font-weight:700; margin-top:6px;">{{ base_url }}</div>
-      <div style="color:var(--muted); font-weight:700; font-size:.85rem; margin-top:12px;">PIN</div>
-      <div style="font-size:1.9rem; font-weight:800; letter-spacing:.2em; margin-top:2px;">{{ pin or '미설정' }}</div>
+
+      {# 화면에서만 보이는 PIN. 인쇄물에는 대신 안내 문구가 나간다. #}
+      <div class="screen-only" style="margin-top:12px;">
+        <div class="pinlab">PIN <span style="font-weight:600;">(화면에서만 보입니다 · 인쇄되지 않음)</span></div>
+        <div class="pinval">{{ pin or '미설정' }}</div>
+      </div>
+      <div class="print-only" style="margin-top:12px;">
+        <div class="pinlab">PIN</div>
+        <div style="font-weight:700; margin-top:4px;">QR 이 안 될 때는 관리사무소에 문의</div>
+      </div>
     </div>
 
     <p class="sub" style="font-size:.85rem; line-height:1.7;">
@@ -64,8 +80,54 @@
 </div>
 
 <div class="stack noprint" style="margin-top:18px;">
-  <button class="btn-k btn-primary" onclick="window.print()">🖨️ 인쇄하기</button>
+  <button class="btn-k btn-primary" onclick="window.print()">🖨️ 인쇄하기 <span style="font-weight:600; font-size:.9rem;">(PIN 제외)</span></button>
   <a href="{{ url_for('admin.lookups') }}" class="btn-k btn-ghost">조회기록 보기</a>
 </div>
 
+<div class="section-title noprint" style="margin-top:26px;"><span>PIN 변경</span></div>
+<div class="card-k noprint">
+  <form method="post" action="{{ url_for('admin.lookup_pin_change') }}" class="stack"
+        onsubmit="return confirm('PIN 을 변경하시겠습니까? 경비실에 새 번호를 알려 주셔야 합니다.');">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <p class="sub" style="margin:0; line-height:1.7;">
+      숫자 4~12자리. 바꾸면 즉시 적용됩니다.<br>
+      <b>QR 은 다시 인쇄하지 않아도 됩니다</b> — QR 은 PIN 이 아니라 별도 토큰으로 열립니다.<br>
+      이미 열려 있는 경비실 화면은 로그아웃되지 않습니다.
+    </p>
+
+    <div class="field">
+      <label>새 PIN</label>
+      <input type="text" name="pin" inputmode="numeric" autocomplete="off" maxlength="12"
+             pattern="\d{4,12}" placeholder="예) 481902" required
+             style="text-align:center; font-size:1.5rem; letter-spacing:.25em;">
+    </div>
+    <div class="field">
+      <label>새 PIN 확인</label>
+      <input type="text" name="pin_confirm" inputmode="numeric" autocomplete="off" maxlength="12"
+             pattern="\d{4,12}" placeholder="한 번 더 입력" required
+             style="text-align:center; font-size:1.5rem; letter-spacing:.25em;">
+    </div>
+
+    <button class="btn-k btn-primary">PIN 변경</button>
+  </form>
+
+  {% if pin_meta %}
+  <p class="sub" style="font-size:.85rem; margin:16px 0 0; text-align:center;">
+    마지막 변경 · {{ pin_meta.updated_by or '-' }}
+    {% if pin_meta.updated_at %}<span data-utc="{{ pin_meta.updated_at }}"></span>{% endif %}
+  </p>
+  {% endif %}
+</div>
+
+<script>
+(function(){
+  document.querySelectorAll('[data-utc]').forEach(function(el){
+    var d = new Date(el.getAttribute('data-utc'));
+    if(isNaN(d)) return;
+    el.textContent = ' · ' + d.toLocaleString('ko-KR', {timeZone:'Asia/Seoul',
+      year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false});
+  });
+})();
+</script>
 {% endblock %}
