@@ -5,8 +5,13 @@
 연다. 대신 신원이 계정으로 남지 않으므로, 조회 시각을 빠짐없이 기록해
 근무자 배치표와 대조해 조회자를 특정한다(models.lookup_log_add).
 
-경비실에는 PIN 이 박힌 QR(관리자 > 경비실 QR 발급)을 붙여 둔다. 찍으면
-`/lookup?pin=...` 으로 들어와 자동 인증되고, 주소창에서 PIN 은 곧바로 지워진다.
+경비실에는 PIN 이 박힌 QR(관리자 > 경비실 QR 발급)을 붙여 둔다. PIN 은
+주소의 **프래그먼트**(`/lookup/#p=...`)에 실린다 — 쿼리스트링에 실으면 nginx 와
+Cloudflare 액세스 로그에 요청줄 그대로 적혀 로그를 볼 수 있는 사람 모두에게
+PIN 이 새기 때문이다. 프래그먼트는 브라우저가 서버로 보내지 않으므로 어떤
+로그에도, Referer 에도 남지 않는다. 화면의 스크립트가 그 값을 읽어 PIN 폼을
+대신 제출하고 주소에서 즉시 지운다. 스크립트가 막힌 단말에서는 인쇄물에 적힌
+PIN 을 직접 입력하면 된다.
 
 노출 정보는 **세대 · 방문기간 · 상태**까지다. 방문자 연락처·방문사유는 보여
 주지 않는다 — 입차 허용 판단에 필요 없는데 경비실 화면에 상시 떠 있게 된다.
@@ -73,22 +78,14 @@ def _record_fail(ip):
 def index():
     ip = client_ip()
 
-    # QR 로 들어온 경우: ?pin=... 을 확인하고 곧바로 주소에서 지운다.
-    # 그대로 두면 브라우저 기록·공유 링크로 PIN 이 새어 나간다.
-    qr_pin = request.args.get("pin")
-
     if not _pin():
         return render_template("lookup/pin.html",
                                error="조회용 PIN 이 설정되지 않았습니다. 관리사무소에 문의하세요.",
                                locked=True), 503
 
-    if qr_pin is not None:
-        if not _throttled(ip) and hmac.compare_digest(qr_pin.strip(), _pin()):
-            _grant()
-            models.lookup_log_add("pin_ok", ip=ip)
-        else:
-            _record_fail(ip)
-            models.lookup_log_add("pin_fail", ip=ip)
+    # 옛 QR(?pin=...)이 남아 있으면 값은 쓰지 않고 주소만 정리해 돌려보낸다.
+    # 로그에 이미 적힌 뒤라 그 값으로 인증해 주는 것은 유출을 눈감아 주는 셈이다.
+    if request.args.get("pin") is not None:
         return redirect(url_for("lookup.index"))
 
     if request.method == "POST" and not _authed():

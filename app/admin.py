@@ -460,7 +460,9 @@ def lookup_qr():
     """
     pin = (current_app.config.get("LOOKUP_PIN") or "").strip()
     base_url = url_for("lookup.index", _external=True)
-    qr_url = base_url + ("?pin=" + quote(pin, safe="") if pin else "")
+    # PIN 은 프래그먼트에 싣는다. 쿼리스트링은 nginx·Cloudflare 액세스 로그에
+    # 요청줄 그대로 적혀, 로그를 볼 수 있는 사람 모두에게 PIN 이 새어 나간다.
+    qr_url = base_url + ("#p=" + quote(pin, safe="") if pin else "")
 
     qr_svg = None
     try:
