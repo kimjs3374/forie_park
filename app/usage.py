@@ -23,7 +23,6 @@
 집계 대상은 시스템 등록 차량만이 아니다. 세대호출·경비실 호출로 들어온 차량도
 관제 로그에 남으면 같은 한도를 적용한다(규약 주의사항).
 """
-import time as _time_module
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 
@@ -84,6 +83,35 @@ OPEN_STAY_MAX_HOURS = 72
 # 중복 스캔으로 보고 먼저 입차를 살린다(체류를 쪼개지 않는다).
 DUP_ENTRY_MINUTES = 5
 
+# ---------------------------------------------------------- 자동 마감 출차 걸러내기
+# 넥스파는 차가 **다시 들어올 때** 열려 있던 낡은 세션을 그 시각으로 자동 마감한다
+# (car.out_check=4). 이건 실제 출차가 아니다. 출차로 세면 입차부터 그 시각까지를
+# 통째로 주차로 계산하게 된다 — 실측: 147구2290 이 7/26~8/29 34일(28박)로 잡혔는데
+# 넥스파 UI 는 같은 차를 8/29 14:30~14:37 **7분 회차차량**으로 보고 있었다.
+#
+# 실측 근거(60일): out_check=4 는 551건 중 543건(98.5%)이 출차 직후 120초 안에 같은
+# 번호판 재입차가 있고 parking_min 이 **한 건도 없다**. 정상 출차(out_check=2)는
+# 33,193건 전부 parking_min 이 채워져 있고 직후 재입차는 0.1% 뿐이다.
+#
+# 에이전트가 out_check=4 를 아예 안 올리도록 고쳤지만, **이미 올라간 로그는 anon 권한으로
+# 지울 수 없다.** 그래서 앱에서도 같은 패턴을 걸러낸다:
+#   출차 직후 이 시간 안에 같은 차량의 입차가 있으면 그 출차는 자동 마감으로 본다.
+# (진짜 회차차량은 '입차 → 짧은 출차' 순서라 이 패턴에 걸리지 않는다)
+AUTO_CLOSE_SECONDS = 120
+
+# 출차 기록이 없는 체류를 얼마로 볼지는 **그 차량 자신의 실측 이력**으로 정한다.
+# 72시간은 천장일 뿐이고, 실제 상한은 `그 차량이 정상 출차로 실측한 최장 체류` 다.
+#
+# 왜: 재활용 수거차 `84노8647` 은 매주 월·화에 와서 **실측 18분** 머물고 가는데,
+# unit16 경로라 출차가 안 찍혀 72시간 상한을 그대로 받아 **14박**으로 잡혔다.
+# `87로4196`(매주 목, 실측 12분)도 13박. 둘 다 야간 입차 0%다. 근거 없는 부과였다.
+# 그 차가 실제로 잰 적 없는 길이를 추정치로 씌우면 안 된다.
+#
+# 실측 이력이 아예 없는 차량(정상 출차 0건)은 추정 근거가 전무하므로 부과하지 않는다.
+# 대신 미출차 점검 목록(open_stays)에 남아 사람이 볼 수 있다.
+# 2026년 초과 29대 중 8대가 이 경우였다 — 전부 unit16 경로에 out_check=4 뿐이었다.
+OPEN_STAY_NO_HISTORY_HOURS = 0
+
 
 def _kst(dt):
     """timestamptz(UTC) → KST naive."""
@@ -141,10 +169,31 @@ def _overlap_minutes(a1, a2, b1, b2):
     return max(0, int((hi - lo).total_seconds() // 60))
 
 
-def _open_end(start, hard_end):
+def measured_max_hours(logs):
+    """그 차량이 **정상 출차로 실제 측정된** 체류 중 최장(시간). 없으면 None.
+
+    입→출로 짝이 맞은 구간만 센다. 짝 없는 입차(추정치)는 당연히 제외한다."""
+    evs = [lg for lg in sorted(logs, key=lambda x: (x.event_time
+                                                    or datetime.min.replace(tzinfo=timezone.utc)))
+           if lg.event_time]
+    best, open_in = None, None
+    for lg in evs:
+        if lg.is_in:
+            open_in = lg.event_time
+        elif open_in is not None:
+            h = (lg.event_time - open_in).total_seconds() / 3600.0
+            if best is None or h > best:
+                best = h
+            open_in = None
+    return best
+
+
+def _open_end(start, hard_end, cap_hours):
     """출차 로그가 없는 체류의 종료 시각(UTC) — 상한을 넘기지 않는다.
-    hard_end 는 '다음 입차' 또는 '지금'. 자세한 근거는 OPEN_STAY_MAX_HOURS 주석 참조."""
-    return min(hard_end, start + timedelta(hours=OPEN_STAY_MAX_HOURS))
+    hard_end 는 '다음 입차' 또는 '지금'. cap_hours 는 차량별 상한(위 주석 참조)."""
+    if cap_hours <= 0:
+        return start
+    return min(hard_end, start + timedelta(hours=cap_hours))
 
 
 def stays(logs, now=None):
@@ -159,9 +208,23 @@ def stays(logs, now=None):
     이 현장은 입차만 남는 기록 누락이 상시 발생한다 — 위 상수 주석의 실측 근거 참조.
     """
     now = now or datetime.now(timezone.utc)
+    # 이 차량의 미출차 추정 상한 = min(천장 72h, 실측 최장 체류). 실측이 없으면 0(부과 안 함).
+    _m = measured_max_hours(logs)
+    cap_hours = (min(OPEN_STAY_MAX_HOURS, _m) if _m is not None
+                 else OPEN_STAY_NO_HISTORY_HOURS)
     evs = [lg for lg in sorted(logs, key=lambda x: (x.event_time
                                                     or datetime.min.replace(tzinfo=timezone.utc)))
            if lg.event_time]
+    # 자동 마감 출차 제거 — 뒤따르는 입차가 AUTO_CLOSE_SECONDS 안에 있으면 그 출차는 가짜다.
+    kept = []
+    for i, lg in enumerate(evs):
+        if not lg.is_in:
+            nxt = next((e for e in evs[i + 1:] if e.is_in), None)
+            if nxt and (nxt.event_time - lg.event_time).total_seconds() <= AUTO_CLOSE_SECONDS:
+                continue
+        kept.append(lg)
+    evs = kept
+
     out, open_in = [], None
     for lg in evs:
         if lg.is_in:
@@ -171,13 +234,13 @@ def stays(logs, now=None):
             if (lg.event_time - open_in).total_seconds() <= DUP_ENTRY_MINUTES * 60:
                 continue                      # 중복 스캔 — 먼저 입차 유지
             # 출차 기록 없이 다시 들어왔다 = 그 사이에 나갔다. 앞 체류를 여기서 닫는다.
-            out.append((_kst(open_in), _kst(_open_end(open_in, lg.event_time))))
+            out.append((_kst(open_in), _kst(_open_end(open_in, lg.event_time, cap_hours))))
             open_in = lg.event_time
         elif open_in is not None:
             out.append((_kst(open_in), _kst(lg.event_time)))
             open_in = None
     if open_in is not None:
-        out.append((_kst(open_in), _kst(_open_end(open_in, now))))
+        out.append((_kst(open_in), _kst(_open_end(open_in, now, cap_hours))))
     # 초 단위는 버린다(models._minutes_between 과 같은 규칙).
     return [(s.replace(second=0, microsecond=0), e.replace(second=0, microsecond=0))
             for s, e in out if s and e and e > s]
@@ -296,6 +359,11 @@ def plan_registration(car_number, entry_dt, exit_dt, today=None, now=None):
     return {"nights": nights, "allowed": allowed, "quotas": quotas}
 
 
+# ⚠️ '호출 입차'라고 단정하면 안 된다. 넥스파 car 테이블에는 **차단기가 어떻게 열렸는지
+#    기록이 없다** — recog_type/pwd_yn/send_flag/status 는 전부 null 또는 상수이고
+#    request_id/session_id/memo 는 전건 비어 있으며 호출 관련 테이블도 없다(2026-09-08 실측).
+#    미들웨어 로그에 visit_check2(홈넷 승인 조회)가 남지만 동/호도 승인결과도 없다.
+#    여기서 아는 사실은 '우리 방문등록에 매칭되는 세대가 없다' 뿐이다.
 # --------------------------------------------------------------- 미출차 점검 목록
 
 # 이 시간을 넘겨 출차 기록이 없으면 점검 목록에 올린다. 상한(OPEN_STAY_MAX_HOURS)에
@@ -388,7 +456,7 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS, logs=None):
             "is_regular": rc is not None,
             "group_name": rc.group_name if rc else None,
             "household": (rc.household_label if rc and rc.household_label != "-"
-                          else household_map.get(car, "미등록(호출 입차)")),
+                          else household_map.get(car, "미등록 — 세대 미상")),
         })
     out.sort(key=lambda x: (not x["would_exceed"], x["entered_at"]))
     return out
@@ -398,23 +466,17 @@ def open_stays(now=None, days=OPEN_REVIEW_DAYS, logs=None):
 
 # ------------------------------------------------------------------ 한도 초과 감시
 
-# 관리 화면 전용 짧은 캐시. 대시보드는 배지 숫자 하나를 얻으려고 이 스캔을 통째로
-# 돌리는데, 로그 7천 건을 진입할 때마다 다시 읽으면 관리 화면 문이 몇 초씩 걸린다.
-# 집계 대상이 관제 로그라 분 단위로 뒤집힐 값도 아니다.
-# 알림 배치(scripts/notify_overuse.py)는 scan_overuse 를 직접 부른다 — 보낼지 말지는
-# 항상 그 순간의 값으로 판단해야 하므로 캐시를 태우지 않는다.
-_SCAN_TTL_SECONDS = 120
-_scan_cache = {}
-
-
 def scan_overuse_cached(month=None):
-    key = month or ""
-    hit = _scan_cache.get(key)
-    if hit and (_time_module.monotonic() - hit[0]) < _SCAN_TTL_SECONDS:
-        return hit[1]
-    report = scan_overuse(month=month)
-    _scan_cache[key] = (_time_module.monotonic(), report)
-    return report
+    """관리 화면용. 자세한 취지는 app/cache.py 주석 참조.
+
+    알림 배치(scripts/notify_overuse.py)는 scan_overuse 를 직접 부른다 — 보낼지
+    말지는 항상 그 순간의 값으로 판단해야 하므로 캐시를 태우지 않는다.
+    """
+    from flask import current_app
+    from . import cache
+    return cache.cached("overuse:" + (month or ""),
+                        lambda: scan_overuse(month=month),
+                        logger=current_app.logger)
 
 
 
@@ -501,7 +563,7 @@ def scan_overuse(month=None, now=None):
             "first_day": nights[0].isoformat(),
             "last_day": nights[-1].isoformat(),
             "last_event": last_event,
-            "households": ", ".join(households) or "미등록(호출 입차)",
+            "households": ", ".join(households) or "미등록 — 세대 미상",
             "registered": bool(households),
             # 출차 로그 없음 → 관제 누락 확인 필요. 한도를 넘긴 차량만 다시 조회한다
             # (전체 차량에 대해 하면 조회가 차량 수만큼 늘어난다).
@@ -509,7 +571,7 @@ def scan_overuse(month=None, now=None):
             "is_regular": car in regular,
         }
         # 정기등록 차량이면 세대·구분을 방문등록이 아니라 **정기등록 명단**에서 가져온다.
-        # 정기차량은 방문등록 이력이 없어 households 가 '미등록(호출 입차)' 로 나오기 때문.
+        # 정기차량은 방문등록 이력이 없어 households 가 '미등록 — 세대 미상' 로 나오기 때문.
         rc = regular_map.get(car)
         if rc:
             row["group_name"] = rc.group_name

@@ -1,6 +1,7 @@
 """관리사무소(admin)용 화면 — 가입 승인 / 반려 및 전체 방문등록 조회."""
 import csv
 import io          # CSV 내보내기에서 쓴다
+from collections import Counter
 import re
 from urllib.parse import quote
 
@@ -327,6 +328,10 @@ def export_workbook():
     )
 
 
+# 화면에 그리는 데이터 이상 건수. 전량은 엑셀 내보내기에 있다.
+ANOMALY_SHOW = 50
+
+
 @admin_bp.route("/suspects")
 @admin_required
 def suspects():
@@ -336,10 +341,17 @@ def suspects():
     # 기간을 안 좁힌 첫 화면은 대시보드 배지와 같은 집계다 — 캐시를 함께 쓴다.
     report = (analytics.scan_cached() if not (date_from or date_to)
               else analytics.scan(date_from, date_to))
+    # 데이터 이상은 세대별 판단이 아니라 관제 연동 품질 지표라, 대부분이 같은 유형의
+    # 이벤트 중복이다(실측 2,007건 중 2,006건). 전부 그리면 페이지가 900KB 를 넘어
+    # 휴대폰에서 화면이 뜨는 데만 몇 초가 걸린다. 여기서는 유형별 건수와 최근 몇 건만
+    # 보이고, 전량은 엑셀 내보내기의 '데이터이상' 시트에서 본다.
+    anomalies = report["anomalies"]
     return render_template(
         "admin/suspects.html",
         households=report["households"],
-        anomalies=report["anomalies"],
+        anomalies=anomalies[:ANOMALY_SHOW],
+        anomaly_total=len(anomalies),
+        anomaly_kinds=Counter(a["kind"] for a in anomalies).most_common(),
         stats=report["stats"],
         scoring=report["scoring"],
         date_from=request.args.get("from", ""),

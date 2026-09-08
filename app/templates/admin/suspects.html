@@ -181,9 +181,29 @@
 </div>
 
 {% if anomalies %}
-<div class="section-title" style="margin-top:22px;"><span>데이터 이상</span></div>
+<div class="section-title" style="margin-top:22px;">
+  <span>데이터 이상</span>
+  <span style="color:#cbd5e1; font-weight:600; font-size:.9rem;">{{ anomaly_total }}건</span>
+</div>
 <div class="card-k" style="padding:14px 16px;">
   <div class="sub" style="margin:0 0 10px;">관제 연동 기록이 앞뒤가 맞지 않는 건입니다. 부정사용과는 별개로 확인이 필요합니다.</div>
+
+  {% if anomaly_kinds %}
+  <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+    {% for kind, n in anomaly_kinds %}
+    <span class="badge-k b-cancel">{{ kind }} {{ n }}건</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if anomaly_total > anomalies|length %}
+  <div class="sub" style="margin:0 0 10px; font-size:.85rem;">
+    화면에는 최근 {{ anomalies|length }}건만 보입니다.
+    전체 {{ anomaly_total }}건은 <a href="{{ url_for('admin.export_workbook') }}"
+       style="color:var(--primary); font-weight:700;">전체 엑셀</a>의 &lsquo;데이터이상&rsquo; 시트에 있습니다.
+  </div>
+  {% endif %}
+
   {% for a in anomalies %}
   <div style="padding:7px 0; border-top:1px solid var(--line, #e5e7eb); font-size:.9rem;">
     <span class="badge-k b-cancel">{{ a.kind }}</span>

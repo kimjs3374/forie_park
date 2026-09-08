@@ -153,7 +153,7 @@
           <div class="ou-car" style="color:var(--muted);">{{ r.car_number }}</div>
           <div class="ou-meta">
             {{ r.entered_at.strftime('%m/%d %H:%M') }} 입차 ·
-            {% if r.is_regular %}{{ r.group_name }}{% if r.household != '미등록(호출 입차)' %} · {{ r.household }}{% endif %}
+            {% if r.is_regular %}{{ r.group_name }}{% if r.household != '미등록 — 세대 미상' %} · {{ r.household }}{% endif %}
             {% else %}{{ r.household }}{% endif %}
           </div>
         </div>

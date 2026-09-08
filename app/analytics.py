@@ -110,22 +110,14 @@ def _max_run(days):
     return best
 
 
-# 관리 화면 전용 짧은 캐시. 대시보드는 배지 숫자 하나를 얻으려고 이 집계를 통째로
-# 돌린다. 기간을 지정하지 않은 기본 집계만 묶어 두고(대시보드·의심세대 첫 화면이
-# 쓰는 바로 그 값), 기간을 좁혀 보는 조회는 매번 새로 센다.
-# 내보내기(CSV/엑셀)도 scan 을 직접 불러 캐시를 타지 않는다.
-_SCAN_TTL_SECONDS = 120
-_scan_cache = None      # (계산시각, 결과)
-
-
 def scan_cached():
-    import time
-    global _scan_cache
-    if _scan_cache and (time.monotonic() - _scan_cache[0]) < _SCAN_TTL_SECONDS:
-        return _scan_cache[1]
-    report = scan()
-    _scan_cache = (time.monotonic(), report)
-    return report
+    """기간을 안 좁힌 기본 집계만 묶는다 — 대시보드 배지와 의심세대 첫 화면이
+    쓰는 바로 그 값이다. 기간을 좁혀 보는 조회와 내보내기는 scan 을 직접 부른다.
+    자세한 취지는 app/cache.py 주석 참조.
+    """
+    from flask import current_app
+    from . import cache
+    return cache.cached("suspects", scan, logger=current_app.logger)
 
 
 def scan(date_from=None, date_to=None):
