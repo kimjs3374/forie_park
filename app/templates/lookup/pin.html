@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}경비실 차량조회{% endblock %}
+{% block topbar %}
+<div class="topbar"><span class="brand" style="color:#fff;">🔎 방문차량 조회</span></div>
+{% endblock %}
+{% block content %}
+<div class="center-screen">
+  <div class="card-k">
+    <div class="stack">
+      <div style="text-align:center;">
+        <h1 class="title">경비실 차량조회</h1>
+        <p class="sub">관리사무소에서 받은 PIN 을 입력하세요.</p>
+      </div>
+
+      {% if error %}
+      <div class="flash danger" style="margin:0;">{{ error }}</div>
+      {% endif %}
+
+      {% if not locked %}
+      <form method="post" class="stack">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field">
+          <input type="password" name="pin" inputmode="numeric" autocomplete="off"
+                 maxlength="20" placeholder="● ● ● ● ● ●" required autofocus
+                 style="text-align:center; font-size:1.8rem; letter-spacing:.4em;">
+        </div>
+        <button class="btn-k btn-primary btn-lg">조회 시작</button>
+      </form>
+      <p class="sub" style="text-align:center; font-size:.9rem;">
+        경비실에 비치된 QR 을 찍으면 PIN 입력 없이 바로 열립니다.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

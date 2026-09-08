@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}사용할 수 없는 링크{% endblock %}
+{% block topbar %}
+<div class="topbar"><span class="brand" style="color:#fff;">🚗 방문차량 등록</span></div>
+{% endblock %}
+{% block content %}
+<div class="center-screen">
+  <div class="card-k">
+    <div class="stack" style="text-align:center;">
+      <div>
+        <div style="font-size:3rem;">⌛</div>
+        <h1 class="title" style="margin-top:10px;">사용할 수 없는 링크입니다</h1>
+      </div>
+      <p class="sub" style="font-size:1.05rem; line-height:1.7;">{{ reason }}</p>
+      <div class="flash info" style="margin:0; text-align:left; line-height:1.7;">
+        등록 링크는 발급 후 <b>{{ share_ttl }}분</b> 동안만 열리고,
+        차량 1대가 등록되면 곧바로 닫힙니다.<br>
+        방문하실 세대에 새 링크를 요청해 주세요.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

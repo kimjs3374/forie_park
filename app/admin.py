@@ -1,6 +1,7 @@
 """관리사무소(admin)용 화면 — 가입 승인 / 반려 및 전체 방문등록 조회."""
 import csv
 import io          # CSV 내보내기에서 쓴다
+from urllib.parse import quote
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 
@@ -425,3 +426,33 @@ def popup_delete(pid):
     models.popups_delete(pid)
     flash("팝업을 삭제했습니다.", "info")
     return redirect(url_for("admin.popups"))
+
+
+# ---------------------------------------------------------- 경비실 차량조회
+# 조회 화면 자체는 lookup 블루프린트(공용 PIN)에 있다. 여기서는 배포용 QR 과
+# 조회기록만 다룬다 — 공용 PIN 이라 조회자가 계정으로 남지 않으므로, 기록을
+# 근무자 배치표와 대조하는 것이 유일한 추적 수단이다.
+
+@admin_bp.route("/lookups")
+@admin_required
+def lookups():
+    date_from = _parse_date(request.args.get("from"))
+    date_to = _parse_date(request.args.get("to"))
+    # 화면에 찍히는 시각은 KST 다. 필터도 KST 하루로 잡아 준다.
+    since = (date_from - timedelta(hours=9)) if date_from else None
+    until = (date_to + timedelta(days=1, hours=-9)) if date_to else None
+    return render_template("admin/lookups.html",
+                           logs=models.lookup_logs_recent(since, until),
+                           date_from=request.args.get("from", ""),
+                           date_to=request.args.get("to", ""))
+
+
+@admin_bp.route("/lookup-qr")
+@admin_required
+def lookup_qr():
+    """경비실에 붙일 QR. PIN 이 박혀 있어 찍으면 곧바로 조회 화면이 열린다."""
+    pin = (current_app.config.get("LOOKUP_PIN") or "").strip()
+    base_url = url_for("lookup.index", _external=True)
+    qr_url = base_url + ("?pin=" + quote(pin, safe="") if pin else "")
+    return render_template("admin/lookup_qr.html", pin=pin, pin_set=bool(pin),
+                           base_url=base_url, qr_url=qr_url)

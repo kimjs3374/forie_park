@@ -36,6 +36,12 @@ class Config:
     KAKAO_REST_API_KEY = os.environ.get("KAKAO_REST_API_KEY", "")
     KAKAO_CLIENT_SECRET = os.environ.get("KAKAO_CLIENT_SECRET", "")
 
+    # 경비실 차량조회 공용 PIN. 경비원에게는 계정이 없어 이 값 하나로 화면을 연다.
+    # 비어 있으면 조회 화면 자체가 열리지 않는다(기본값으로 뚫려 있으면 안 되므로).
+    LOOKUP_PIN = os.environ.get("LOOKUP_PIN", "")
+    # PIN 을 한 번 넣으면 이 시간만큼 그 단말에서 다시 묻지 않는다(교대 근무 1회분).
+    LOOKUP_SESSION_HOURS = int(os.environ.get("LOOKUP_SESSION_HOURS", 12))
+
     # 세션 쿠키 보안 (Cloudflare 뒤 HTTPS 전용)
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")

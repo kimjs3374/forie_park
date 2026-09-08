@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}등록 링크 보내기{% endblock %}
+{% block content %}
+<style>
+  .seg{ display:grid; grid-auto-flow:column; gap:8px; }
+  .seg .opt{
+    border:2px solid var(--line); background:#f8fafc; border-radius:14px;
+    padding:14px 0; text-align:center; font-weight:700; font-size:1.05rem; cursor:pointer;
+    color:#334155; transition:.12s; user-select:none;
+  }
+  .seg .opt.on{
+    border-color:var(--primary); background:#eef2ff; color:var(--primary-d);
+    box-shadow:0 0 0 4px rgba(79,70,229,.10);
+  }
+  .rulebox{ background:#f8fafc; border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; font-size:.85rem; font-weight:600;
+    color:var(--muted); line-height:1.65; }
+  .rulebox b{ color:var(--ink); }
+  .rulebox ul{ margin:8px 0 0; padding-left:18px; }
+  .rulebox li{ margin-top:4px; }
+  .datesel{
+    width:100%; height:60px; font-size:1.15rem; font-weight:700; color:var(--ink);
+    border:2px solid var(--line); border-radius:14px; padding:0 14px; background:#f8fafc;
+    outline:none;
+  }
+  .datesel:focus{ border-color:var(--primary); background-color:#fff; box-shadow:0 0 0 4px rgba(79,70,229,.12); }
+</style>
+
+<div class="card-k">
+  <div class="stack">
+    <div>
+      <h1 class="title">방문자에게 등록 링크 보내기</h1>
+      <p class="sub">{{ current_user.household_label }} 세대 · 차량번호는 방문자가 직접 입력합니다.</p>
+    </div>
+
+    <div class="rulebox">
+      <b>방문사유와 방문기간은 지금 정하고,</b> 차량번호와 연락처는 방문자가 링크에서 넣습니다.
+      <ul>
+        <li>링크는 발급 후 <b>{{ share_ttl }}분</b> 동안만 열립니다.</li>
+        <li>방문자가 <b>1대를 등록하면 그 즉시</b> 링크가 닫힙니다.</li>
+        <li>새 링크를 만들면 앞서 보낸 링크는 무효가 됩니다.</li>
+        <li>월 주차일수 한도는 직접 등록할 때와 똑같이 적용됩니다.</li>
+      </ul>
+    </div>
+
+    <form method="post" class="stack" id="shareForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="field">
+        <label>방문사유</label>
+        <input type="text" name="visit_reason" id="reasonInput" value="{{ form.visit_reason or '' }}"
+               placeholder="예) 가족·지인 방문, 택배, 방문서비스" maxlength="100"
+               autocomplete="off" list="reasonList" required style="font-size:1.15rem;" autofocus>
+        <datalist id="reasonList">
+          <option value="가족·지인 방문"></option>
+          <option value="택배·배송"></option>
+          <option value="방문서비스(수리·설치)"></option>
+          <option value="학습지·방문교육"></option>
+          <option value="업무·미팅"></option>
+        </datalist>
+      </div>
+
+      <div class="field">
+        <label>차량종류 <span style="color:var(--muted); font-weight:600;">(선택)</span></label>
+        <input type="text" name="car_type" value="{{ form.car_type or '' }}"
+               placeholder="예) 아반떼, 카니발, 포터" maxlength="30"
+               autocomplete="off" style="font-size:1.15rem;">
+      </div>
+
+      <div class="field">
+        <label>입차 날짜</label>
+        <div class="seg" id="inDaySeg" style="margin-bottom:10px;">
+          <div class="opt on" data-day="0">오늘</div>
+          <div class="opt" data-day="1">내일</div>
+          <div class="opt" data-day="2">모레</div>
+        </div>
+        <input type="date" name="entry_date" id="entryDate" class="datesel"
+               value="{{ form.entry_date or today.isoformat() }}" min="{{ today.isoformat() }}" required>
+      </div>
+
+      <div class="field">
+        <label>방문기간 <span style="color:var(--muted); font-weight:600;">(최대 3일 · 하루 종일)</span></label>
+        <div class="seg" id="outDaySeg">
+          <div class="opt on" data-plus="0">당일</div>
+          <div class="opt" data-plus="1">+1일</div>
+          <div class="opt" data-plus="2">+2일</div>
+        </div>
+        <input type="hidden" name="extra_days" id="extraDays" value="0">
+      </div>
+
+      <button class="btn-k btn-primary btn-lg">🔗 링크 만들기</button>
+      <a href="{{ url_for('main.index') }}" class="btn-k btn-ghost">취소</a>
+    </form>
+  </div>
+</div>
+
+{% if recent %}
+<div class="section-title" style="margin-top:22px;"><span>최근 발급한 링크</span></div>
+<div class="stack">
+  {% for s in recent %}
+  <div class="item" style="align-items:center;">
+    <div style="min-width:0;">
+      <div style="font-weight:700;">{{ s.visit_reason }}</div>
+      <div class="time">
+        {{ s.registrant_name }} 발급 · 방문기간 {{ s.entry_time.strftime('%m/%d') }} ~ {{ s.exit_time.strftime('%m/%d') }}
+      </div>
+    </div>
+    <span class="badge-k {{ 'b-ok' if s.state_label == '등록완료' else ('b-wait' if s.state_label == '유효' else 'b-cancel') }}">{{ s.state_label }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+(function(){
+  const DAY=86400000;
+  const pad=n=>String(n).padStart(2,'0');
+  const entryDate=document.getElementById('entryDate');
+  const extraDays=document.getElementById('extraDays');
+
+  function todayMidnight(){ const d=new Date(); d.setHours(0,0,0,0); return d; }
+  function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+
+  function syncChips(){
+    const v=entryDate.value ? new Date(entryDate.value+'T00:00:00') : todayMidnight();
+    const diff=Math.round((v-todayMidnight())/DAY);
+    document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.classList.toggle('on',+o.dataset.day===diff));
+  }
+  document.querySelectorAll('#inDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{
+    entryDate.value=fmt(new Date(todayMidnight().getTime()+(+o.dataset.day)*DAY));
+    syncChips();
+  }));
+  entryDate.addEventListener('change',syncChips);
+  document.querySelectorAll('#outDaySeg .opt').forEach(o=>o.addEventListener('click',()=>{
+    extraDays.value=o.dataset.plus;
+    document.querySelectorAll('#outDaySeg .opt').forEach(x=>x.classList.toggle('on',x===o));
+  }));
+  syncChips();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}관리 - 경비실 QR 발급{% endblock %}
+{% block content %}
+<style>
+  @media print{
+    body{ background:#fff !important; }
+    .topbar, .section-title, .noprint, .flash{ display:none !important; }
+    .kiosk{ padding:0 !important; }
+    .card-k{ box-shadow:none !important; border:1px solid #cbd5e1; }
+  }
+</style>
+
+<div class="section-title noprint">
+  <span>경비실 QR 발급</span>
+  <a href="{{ url_for('admin.dashboard') }}">← 관리</a>
+</div>
+
+{% if not pin_set %}
+<div class="flash danger">
+  조회용 PIN(<code>LOOKUP_PIN</code>)이 서버에 설정되지 않았습니다. 설정 전에는 경비실 화면이 열리지 않습니다.
+</div>
+{% endif %}
+
+<div class="card-k" style="text-align:center;">
+  <div class="stack">
+    <div>
+      <h1 class="title">방문차량 조회</h1>
+      <p class="sub">경비실 · 관리사무소 전용</p>
+    </div>
+
+    <div style="display:flex; justify-content:center;">
+      <div id="qr" style="background:#fff; padding:14px; border-radius:16px; border:1px solid var(--line);"></div>
+    </div>
+
+    <div style="font-weight:800; font-size:1.05rem; letter-spacing:-.01em;">
+      휴대폰 카메라로 QR 을 찍으면 바로 열립니다
+    </div>
+
+    <div style="background:#f8fafc; border:2px dashed var(--line); border-radius:14px; padding:16px;">
+      <div style="color:var(--muted); font-weight:700; font-size:.85rem;">직접 접속 주소</div>
+      <div style="word-break:break-all; font-weight:700; margin-top:6px;">{{ base_url }}</div>
+      <div style="color:var(--muted); font-weight:700; font-size:.85rem; margin-top:12px;">PIN</div>
+      <div style="font-size:1.9rem; font-weight:800; letter-spacing:.2em; margin-top:2px;">{{ pin or '미설정' }}</div>
+    </div>
+
+    <p class="sub" style="font-size:.85rem; line-height:1.7;">
+      이 종이는 경비실 안에만 두세요. QR 에는 PIN 이 들어 있어 찍은 사람은 누구나 조회할 수 있습니다.<br>
+      모든 조회는 시각과 함께 기록됩니다.
+    </p>
+  </div>
+</div>
+
+<div class="stack noprint" style="margin-top:18px;">
+  <button class="btn-k btn-primary" onclick="window.print()">🖨️ 인쇄하기</button>
+  <a href="{{ url_for('admin.lookups') }}" class="btn-k btn-ghost">조회기록 보기</a>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+(function(){
+  var target = {{ qr_url|tojson }};
+  var box = document.getElementById('qr');
+  if(!window.QRCode){ box.textContent = 'QR 생성 스크립트를 불러오지 못했습니다.'; return; }
+  QRCode.toCanvas(target, { width: 240, margin: 1 }, function(err, canvas){
+    if(err){ box.textContent = 'QR 생성 실패'; return; }
+    box.appendChild(canvas);
+  });
+})();
+</script>
+{% endblock %}

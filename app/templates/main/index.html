@@ -5,6 +5,8 @@
   <p class="sub" style="margin:0;">{{ current_user.household_label }}</p>
   <h1 class="title" style="margin:6px 0 24px; font-size:1.5rem;">{{ current_user.name }}님, 환영합니다</h1>
   <a href="{{ url_for('main.visit_new') }}" class="btn-k btn-primary btn-lg">＋ 방문차량 등록하기</a>
+  {# 방문객 차량번호를 전화로 받아 적다 오입력하는 일이 잦아, 등록 권한을 잠깐 넘긴다. #}
+  <a href="{{ url_for('share.new') }}" class="btn-k btn-ghost" style="margin-top:10px;">🔗 방문자에게 등록 링크 보내기</a>
 </div>
 
 <div class="section-title">

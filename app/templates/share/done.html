@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}등록 완료{% endblock %}
+{% block topbar %}
+<div class="topbar"><span class="brand" style="color:#fff;">🚗 방문차량 등록</span></div>
+{% endblock %}
+{% block content %}
+<div class="center-screen">
+  <div class="card-k">
+    <div class="stack" style="text-align:center;">
+      <div>
+        <div style="font-size:3rem;">✅</div>
+        <h1 class="title" style="margin-top:10px;">등록이 완료되었습니다</h1>
+      </div>
+
+      <div style="background:#f8fafc; border-radius:16px; padding:20px;">
+        <div class="plate" style="font-size:1.8rem;">{{ car_number }}</div>
+        <div class="time" style="margin-top:8px; line-height:1.8;">
+          {{ share.household_label }} 방문<br>
+          {{ entry_time.strftime('%m월 %d일') }} ~ {{ exit_time.strftime('%m월 %d일') }}
+        </div>
+      </div>
+
+      {% if notice %}
+      <div class="flash warning" style="margin:0; text-align:left;">{{ notice }}</div>
+      {% endif %}
+
+      <div class="flash info" style="margin:0; text-align:left; line-height:1.7;">
+        ⚠️ 이용 안내<br>
+        · 방문차량 등록은 <b>입차만</b> 허용됩니다.<br>
+        · 오후 8시 이후 숙박(밤샘 주차)을 원하실 경우, 관리사무소 또는 경비실을 경유하여
+          <b>방문차량증</b>을 작성하시고 앞유리 대시보드 위 잘 보이는 곳에 비치해 주세요.<br>
+        · 방문차량증이 없는 경우 <b>주차단속 대상</b>이 됩니다.
+      </div>
+
+      <p class="sub" style="font-size:.85rem;">
+        이 링크는 사용이 끝나 더 이상 열리지 않습니다.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

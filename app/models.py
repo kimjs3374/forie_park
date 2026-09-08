@@ -998,3 +998,304 @@ def overuse_alert_keys(period):
 def overuse_alert_add(car_number, period, days):
     return sb.insert_row(T_OVERUSE, {"car_number": car_number,
                                      "period": period, "days": int(days)})
+
+
+# ---------------------------------------------------------- 경비실 차량조회
+# 경비원은 계정 없이 공용 PIN 으로 들어온다. 조회 자체를 남겨 두어야 나중에
+# 근무자 배치표와 대조해 누가 조회했는지 특정할 수 있다.
+T_LOOKUP_LOGS = "parking_lookup_logs"
+
+# 조회에 필요한 최소 자릿수. 두세 자리로 훑으면 사실상 전량 열람이 된다.
+LOOKUP_MIN_LEN = 4
+
+
+def visits_lookup_by_car(car_query, limit=20):
+    """차량번호 일부(보통 뒤 4자리)로 방문등록을 찾는다. 최근 등록부터.
+
+    취소분까지 함께 돌려준다 — 경비원이 '취소된 등록을 들고 온 차'를 구분할 수
+    있어야 하기 때문이다. 상태 판정은 화면에서 한다.
+    """
+    q = normalize_car_query(car_query)
+    if len(q) < LOOKUP_MIN_LEN:
+        return []
+    params = [("select", "*"),
+              ("car_number", f"ilike.*{q}*"),
+              ("order", "entry_time.desc,id.desc"),
+              ("limit", str(int(limit)))]
+    return [VisitRegistration(r) for r in sb.fetch_rows(T_VISITS, params)]
+
+
+def regular_cars_search(car_query, today=None, limit=20):
+    """같은 검색어로 정기(월주차) 차량도 찾는다.
+
+    입주민의 정기차량을 '미등록'으로 오인해 단속하는 사고를 막기 위한 것이다.
+    테이블이 없거나 조회에 실패해도 방문등록 조회는 살아 있어야 하므로 삼킨다.
+    """
+    q = normalize_car_query(car_query)
+    if len(q) < LOOKUP_MIN_LEN:
+        return []
+    today_s = (today or datetime.now(timezone.utc).date()).isoformat()
+    params = [("is_active", "eq.true"),
+              ("or", f"(valid_to.is.null,valid_to.gte.{today_s})"),
+              ("car_number", f"ilike.*{q}*"),
+              ("order", "car_number.asc"),
+              ("limit", str(int(limit)))]
+    latest = regular_cars_synced_at()
+    if latest:
+        cutoff = latest - timedelta(days=REGULAR_STALE_DAYS)
+        params.append(("synced_at", f"gte.{cutoff.isoformat()}"))
+    try:
+        return [RegularCar(r) for r in sb.fetch_rows(T_REGULAR, params)]
+    except Exception:
+        return []
+
+
+def lookup_log_add(kind, query=None, result_count=0, ip=None):
+    """조회/인증 시도를 남긴다. 기록 실패가 조회를 막지 않도록 예외를 삼킨다."""
+    try:
+        return sb.insert_row(T_LOOKUP_LOGS, {
+            "kind": kind,
+            "query": (query or "")[:30] or None,
+            "result_count": int(result_count),
+            "ip": (ip or "")[:64] or None,
+        })
+    except Exception:
+        return None
+
+
+class LookupLog:
+    def __init__(self, row):
+        self._row = row or {}
+
+    @property
+    def id(self):
+        return self._row.get("id")
+
+    @property
+    def kind(self):
+        return self._row.get("kind") or "search"
+
+    @property
+    def query(self):
+        return self._row.get("query")
+
+    @property
+    def result_count(self):
+        return self._row.get("result_count") or 0
+
+    @property
+    def ip(self):
+        return self._row.get("ip")
+
+    @property
+    def created_at(self):
+        return _parse_dt(self._row.get("created_at"))
+
+    @property
+    def created_at_kst(self):
+        dt = self.created_at
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            return dt
+        return (dt.astimezone(timezone.utc) + timedelta(hours=9)).replace(tzinfo=None)
+
+
+def lookup_logs_recent(since=None, until=None, limit=300, offset=None):
+    """조회기록. since/until 은 **UTC** 경계(호출부가 KST 날짜를 변환해 넘긴다).
+
+    created_at 은 timestamptz 라 날짜 문자열을 그대로 던지면 UTC 자정으로 잘려
+    KST 하루와 9시간 어긋난다. 근무자 배치표와 대조하는 화면이라 그 9시간이
+    곧 오독이 되므로 경계를 호출부에서 명시적으로 만든다.
+    """
+    params = [("select", "*"), ("order", "created_at.desc")]
+    if since:
+        params.append(("created_at", f"gte.{since.isoformat()}"))
+    if until:
+        params.append(("created_at", f"lt.{until.isoformat()}"))
+    if limit:
+        params.append(("limit", str(int(limit))))
+    if offset:
+        params.append(("offset", str(int(offset))))
+    try:
+        return [LookupLog(r) for r in sb.fetch_rows(T_LOOKUP_LOGS, params)]
+    except Exception:
+        return []
+
+
+# ------------------------------------------------- 임시 등록권한 공유링크
+# 입주민이 방문사유·기간을 정해 링크를 만들고, 방문자가 차량번호·연락처만 넣어
+# 등록을 끝낸다. 유효시간 10분, 1건 등록되면 즉시 소진.
+T_SHARE = "parking_share_tokens"
+
+SHARE_TTL_MINUTES = 10
+
+
+def share_token_hash(raw):
+    """원문 토큰은 저장하지 않는다 — DB 가 새도 링크를 되살릴 수 없어야 한다."""
+    import hashlib
+    return hashlib.sha256(str(raw or "").encode("utf-8")).hexdigest()
+
+
+class ShareToken:
+    def __init__(self, row):
+        self._row = row or {}
+
+    @property
+    def id(self):
+        return self._row.get("id")
+
+    @property
+    def user_id(self):
+        return self._row.get("user_id")
+
+    @property
+    def dong(self):
+        return self._row.get("dong")
+
+    @property
+    def ho(self):
+        return self._row.get("ho")
+
+    @property
+    def registrant_name(self):
+        return self._row.get("registrant_name")
+
+    @property
+    def visit_reason(self):
+        return self._row.get("visit_reason")
+
+    @property
+    def car_type(self):
+        return self._row.get("car_type")
+
+    @property
+    def entry_time(self):
+        return _parse_dt(self._row.get("entry_time"))
+
+    @property
+    def exit_time(self):
+        return _parse_dt(self._row.get("exit_time"))
+
+    @property
+    def expires_at(self):
+        return _parse_dt(self._row.get("expires_at"))
+
+    @property
+    def used_at(self):
+        return _parse_dt(self._row.get("used_at"))
+
+    @property
+    def revoked_at(self):
+        return _parse_dt(self._row.get("revoked_at"))
+
+    @property
+    def visit_id(self):
+        return self._row.get("visit_id")
+
+    @property
+    def created_at(self):
+        return _parse_dt(self._row.get("created_at"))
+
+    @property
+    def household_label(self):
+        return f"{self.dong}동 {self.ho}호"
+
+    @property
+    def seconds_left(self):
+        exp = self.expires_at
+        if not exp:
+            return 0
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return max(0, int((exp - datetime.now(timezone.utc)).total_seconds()))
+
+    @property
+    def is_expired(self):
+        return self.seconds_left <= 0
+
+    @property
+    def is_used(self):
+        return self.used_at is not None
+
+    @property
+    def is_revoked(self):
+        return self.revoked_at is not None
+
+    @property
+    def is_live(self):
+        """아직 방문자가 쓸 수 있는 링크인가."""
+        return not (self.is_used or self.is_revoked or self.is_expired)
+
+    @property
+    def state_label(self):
+        if self.is_used:
+            return "등록완료"
+        if self.is_revoked:
+            return "무효"
+        if self.is_expired:
+            return "만료"
+        return "유효"
+
+
+def share_create(data):
+    return ShareToken(sb.insert_row(T_SHARE, data))
+
+
+def share_get_by_token(raw):
+    row = sb.fetch_one(T_SHARE, {"token_hash": f"eq.{share_token_hash(raw)}"})
+    return ShareToken(row) if row else None
+
+
+def share_claim(share_id):
+    """아직 안 쓰인 링크를 사용중으로 선점한다. 이미 쓰였으면 False.
+
+    `used_at is null` 을 UPDATE 조건에 넣어 DB 한 번의 왕복으로 판정한다.
+    읽고 나서 쓰면 두 사람이 같은 링크를 동시에 제출했을 때 둘 다 통과해
+    한 장으로 두 대가 등록된다 — 세대 한도를 그만큼 우회하게 된다.
+    """
+    rows = sb.patch_rows(T_SHARE, {"used_at": _utcnow_iso()},
+                         [("id", f"eq.{int(share_id)}"), ("used_at", "is.null")])
+    return bool(rows)
+
+
+def share_attach_visit(share_id, visit_id):
+    """선점한 링크에 실제로 만들어진 등록 id 를 붙인다."""
+    return sb.patch_rows(T_SHARE, {"visit_id": int(visit_id)},
+                         {"id": f"eq.{int(share_id)}"})
+
+
+def share_release(share_id):
+    """선점 후 등록에 실패했을 때 되돌린다 — 링크를 헛되이 태우지 않는다."""
+    try:
+        return sb.patch_rows(T_SHARE, {"used_at": None}, {"id": f"eq.{int(share_id)}"})
+    except Exception:
+        return []
+
+
+def share_revoke_live(user_id):
+    """이 계정이 앞서 만든, 아직 살아 있는 링크를 모두 무효화한다.
+
+    세대에 링크가 여러 장 동시에 떠다니면 어느 것이 진짜인지 알 수 없고,
+    카톡방에 남은 옛 링크가 그대로 통하는 사고가 난다. 항상 마지막 한 장만 유효.
+    """
+    try:
+        return sb.patch_rows(T_SHARE, {"revoked_at": _utcnow_iso()},
+                             [("user_id", f"eq.{int(user_id)}"),
+                              ("used_at", "is.null"),
+                              ("revoked_at", "is.null"),
+                              ("expires_at", f"gt.{_utcnow_iso()}")])
+    except Exception:
+        return []
+
+
+def share_recent_by_household(dong, ho, limit=10):
+    dong, ho = str(dong or "").strip(), str(ho or "").strip()
+    if not (dong and ho):
+        return []
+    params = [("select", "*"), ("dong", f"eq.{dong}"), ("ho", f"eq.{ho}"),
+              ("order", "created_at.desc"), ("limit", str(int(limit)))]
+    try:
+        return [ShareToken(r) for r in sb.fetch_rows(T_SHARE, params)]
+    except Exception:
+        return []

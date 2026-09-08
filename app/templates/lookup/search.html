@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}방문차량 조회{% endblock %}
+{% block topbar %}
+<div class="topbar">
+  <span class="brand" style="color:#fff;">🔎 방문차량 조회</span>
+  <form method="post" action="{{ url_for('lookup.exit_session') }}" style="margin:0;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="chip" style="border:none; color:#cbd5e1; font-weight:600; font-size:.95rem; cursor:pointer;">종료</button>
+  </form>
+</div>
+{% endblock %}
+{% block content %}
+<div class="card-k">
+  <form method="get" class="stack">
+    <div class="field">
+      <label>차량번호 뒤 4자리</label>
+      <input type="text" name="car" value="{{ car }}" inputmode="numeric" autocomplete="off"
+             maxlength="12" placeholder="3456" required autofocus
+             style="text-align:center; font-size:2rem; letter-spacing:.12em;">
+    </div>
+    <button class="btn-k btn-primary btn-lg">조회</button>
+  </form>
+</div>
+
+{% if warn %}
+<div class="flash warning" style="margin-top:18px;">{{ warn }}</div>
+{% endif %}
+
+{% if results is not none %}
+<div class="section-title" style="margin-top:22px;">
+  <span>조회 결과 · {{ car }}</span>
+  <span style="color:#cbd5e1; font-weight:600; font-size:.9rem;">{{ now_kst.strftime('%m/%d %H:%M') }} 기준</span>
+</div>
+
+<div class="stack">
+  {% if not results and not regulars %}
+  <div class="card-k" style="text-align:center; padding:34px 22px;">
+    <div style="font-size:2.6rem;">🚫</div>
+    <div style="font-weight:800; font-size:1.25rem; margin-top:10px; color:var(--danger);">등록 내역 없음</div>
+    <p class="sub">이 번호로 등록된 방문차량·정기차량이 없습니다.</p>
+  </div>
+  {% endif %}
+
+  {% for r in results %}
+  {% set expired = r.exit_time and r.exit_time.replace(tzinfo=None) < now_kst %}
+  <div class="item" style="flex-direction:column; align-items:stretch; gap:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div style="min-width:0;">
+        <div class="plate">{{ r.car_number }}</div>
+        <div class="time" style="font-weight:700; color:var(--ink); margin-top:2px;">
+          {{ r.dong }}동 {{ r.ho }}호
+        </div>
+      </div>
+      {% if r.status == 'cancelled' %}
+        <span class="badge-k b-cancel">취소됨</span>
+      {% elif r.visit_state == 'exited' %}
+        <span class="badge-k b-cancel">출차완료</span>
+      {% elif r.visit_state == 'entered' %}
+        <span class="badge-k b-ok">주차중</span>
+      {% elif expired %}
+        <span class="badge-k b-cancel">기간만료</span>
+      {% else %}
+        <span class="badge-k b-ok">등록완료</span>
+      {% endif %}
+    </div>
+    <div class="time" style="border-top:1px solid var(--line); padding-top:10px;">
+      방문기간 <strong>{{ r.entry_time.strftime('%m/%d') }} ~ {{ r.exit_time.strftime('%m/%d') }}</strong>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% for c in regulars %}
+  <div class="item" style="flex-direction:column; align-items:stretch; gap:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+      <div style="min-width:0;">
+        <div class="plate">{{ c.car_number }}</div>
+        <div class="time" style="font-weight:700; color:var(--ink); margin-top:2px;">{{ c.household_label }}</div>
+      </div>
+      <span class="badge-k b-ok" style="background:#e0e7ff; color:#3730a3;">정기(월주차)</span>
+    </div>
+    <div class="time" style="border-top:1px solid var(--line); padding-top:10px;">
+      정기등록 차량입니다. 방문차량 등록이 없어도 입차 대상입니다.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<p class="sub" style="text-align:center; color:#94a3b8; font-size:.85rem; margin-top:20px;">
+  조회 기록은 시각과 함께 저장됩니다.
+</p>
+{% endif %}
+{% endblock %}

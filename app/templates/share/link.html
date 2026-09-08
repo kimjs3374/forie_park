@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}등록 링크 전달{% endblock %}
+{% block content %}
+<div class="card-k">
+  <div class="stack">
+    <div style="text-align:center;">
+      <div style="font-size:2.6rem;">🔗</div>
+      <h1 class="title" style="margin-top:8px;">링크가 만들어졌습니다</h1>
+      <p class="sub">아래 링크를 방문자에게 보내 주세요.</p>
+    </div>
+
+    <div id="ttlBox" style="text-align:center; background:#eef2ff; border-radius:16px; padding:18px;">
+      <div style="color:var(--muted); font-weight:700; font-size:.9rem;">남은 유효시간</div>
+      <div id="ttl" style="font-size:2.2rem; font-weight:800; color:var(--primary-d); font-variant-numeric:tabular-nums;">--:--</div>
+    </div>
+
+    <div style="background:#f8fafc; border:2px solid var(--line); border-radius:14px;
+                padding:14px; word-break:break-all; font-size:.95rem; font-weight:600; color:#334155;"
+         id="urlText">{{ url }}</div>
+
+    <button class="btn-k btn-primary btn-lg" id="copyBtn">📋 링크 복사</button>
+    <button class="btn-k btn-ghost" id="shareBtn" style="display:none;">📤 카카오톡·문자로 보내기</button>
+
+    <div class="rulebox" style="background:#f8fafc; border:1px solid var(--line); border-radius:12px;
+         padding:12px 14px; font-size:.85rem; font-weight:600; color:var(--muted); line-height:1.65;">
+      <b>{{ token.household_label }}</b> ·
+      방문사유 <b>{{ token.visit_reason }}</b> · 방문기간
+      <b>{{ token.entry_time.strftime('%m/%d') }} ~ {{ token.exit_time.strftime('%m/%d') }}</b><br>
+      방문자가 차량 1대를 등록하면 링크는 즉시 닫힙니다.
+      유효시간이 지나면 이 화면을 새로 열어 다시 발급해 주세요.
+    </div>
+
+    <a href="{{ url_for('main.visit_list') }}" class="btn-k btn-ghost">내 등록 내역 보기</a>
+  </div>
+</div>
+
+<script>
+(function(){
+  var url = {{ url|tojson }};
+  var left = {{ token.seconds_left }};
+  var ttl = document.getElementById('ttl');
+  var box = document.getElementById('ttlBox');
+
+  function tick(){
+    if(left <= 0){
+      ttl.textContent = '만료됨';
+      ttl.style.color = 'var(--danger)';
+      box.style.background = '#fee2e2';
+      return;
+    }
+    var m = Math.floor(left/60), s = left%60;
+    ttl.textContent = m + ':' + String(s).padStart(2,'0');
+    left--;
+    setTimeout(tick, 1000);
+  }
+  tick();
+
+  var btn = document.getElementById('copyBtn');
+  btn.addEventListener('click', function(){
+    function done(){ btn.textContent = '✅ 복사되었습니다'; setTimeout(function(){ btn.textContent='📋 링크 복사'; }, 2000); }
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(url).then(done).catch(fallback);
+    } else { fallback(); }
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); done(); }catch(e){ alert('복사에 실패했습니다. 링크를 길게 눌러 복사해 주세요.'); }
+      document.body.removeChild(ta);
+    }
+  });
+
+  if(navigator.share){
+    var sb = document.getElementById('shareBtn');
+    sb.style.display = '';
+    sb.addEventListener('click', function(){
+      navigator.share({ title: '방문차량 등록', text: '아래 링크에서 차량번호를 등록해 주세요.', url: url })
+               .catch(function(){});
+    });
+  }
+})();
+</script>
+{% endblock %}

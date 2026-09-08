@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}관리 - 경비실 조회기록{% endblock %}
+{% block content %}
+<div class="section-title">
+  <span>경비실 조회기록</span>
+  <a href="{{ url_for('admin.dashboard') }}">← 관리</a>
+</div>
+
+<div class="card-k" style="padding:20px; margin-bottom:18px;">
+  <form method="get" class="stack" style="gap:12px;">
+    <div class="row2">
+      <div class="field">
+        <label style="font-size:.85rem;">시작일</label>
+        <input type="date" name="from" value="{{ date_from }}" style="height:52px; font-size:1rem;">
+      </div>
+      <div class="field">
+        <label style="font-size:.85rem;">종료일</label>
+        <input type="date" name="to" value="{{ date_to }}" style="height:52px; font-size:1rem;">
+      </div>
+    </div>
+    <button class="btn-k btn-primary" style="min-height:52px;">조회</button>
+  </form>
+  <p class="sub" style="font-size:.85rem; margin-top:14px; line-height:1.7;">
+    경비실 화면은 공용 PIN 으로 열리므로 조회자가 계정으로 남지 않습니다.
+    아래 <b>조회 시각</b>을 근무자 배치표와 대조해 확인하세요.
+  </p>
+</div>
+
+<div class="stack">
+{% if logs %}
+  {% for lg in logs %}
+  <div class="item" style="align-items:center; padding:16px 20px;">
+    <div style="min-width:0;">
+      <div style="font-weight:800; font-variant-numeric:tabular-nums;">
+        {{ lg.created_at_kst.strftime('%Y-%m-%d %H:%M:%S') if lg.created_at_kst else '-' }}
+      </div>
+      <div class="time" style="margin-top:3px;">
+        {% if lg.kind == 'search' %}
+          검색어 <b style="color:var(--ink);">{{ lg.query }}</b> · 결과 {{ lg.result_count }}건
+        {% elif lg.kind == 'pin_ok' %}
+          PIN 인증 성공
+        {% else %}
+          PIN 인증 실패
+        {% endif %}
+        · {{ lg.ip or '-' }}
+      </div>
+    </div>
+    {% if lg.kind == 'pin_fail' %}
+      <span class="badge-k b-cancel" style="background:#fee2e2; color:#991b1b;">실패</span>
+    {% elif lg.kind == 'pin_ok' %}
+      <span class="badge-k b-wait">인증</span>
+    {% elif lg.result_count %}
+      <span class="badge-k b-ok">조회</span>
+    {% else %}
+      <span class="badge-k b-cancel">없음</span>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <div class="item" style="justify-content:center; color:var(--muted);">조회기록이 없습니다.</div>
+{% endif %}
+</div>
+{% endblock %}

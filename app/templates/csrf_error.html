@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}다시 시도해 주세요{% endblock %}
+{% block topbar %}
+<div class="topbar"><span class="brand" style="color:#fff;">🚗 방문차량 등록</span></div>
+{% endblock %}
+{% block content %}
+<div class="center-screen">
+  <div class="card-k">
+    <div class="stack" style="text-align:center;">
+      <div>
+        <div style="font-size:3rem;">🔄</div>
+        <h1 class="title" style="margin-top:10px;">다시 시도해 주세요</h1>
+      </div>
+      <p class="sub" style="font-size:1.05rem; line-height:1.7;">
+        화면을 열어 둔 시간이 길어 입력이 만료되었거나,<br>
+        브라우저 설정 때문에 전송이 거부되었습니다.<br>
+        입력하신 내용은 저장되지 않았습니다.
+      </p>
+      <button class="btn-k btn-primary btn-lg" onclick="location.reload()">새로고침 후 다시 입력</button>
+      <p class="sub" style="font-size:.85rem;">
+        계속 같은 화면이 나오면 카카오톡 대화창에서 링크를 다시 눌러 주세요.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}방문차량 등록{% endblock %}
+{% block topbar %}
+<div class="topbar"><span class="brand" style="color:#fff;">🚗 방문차량 등록</span></div>
+{% endblock %}
+{% block content %}
+<style>
+  .infobox{ background:#eef2ff; border-radius:16px; padding:16px 18px; font-size:.95rem;
+    font-weight:600; color:#3730a3; line-height:1.7; }
+  .infobox b{ color:var(--primary-d); }
+  .ttlbar{ text-align:center; font-weight:800; font-variant-numeric:tabular-nums; }
+</style>
+
+{% if block_msg %}
+<div id="blockModal" class="modal-back">
+  <div class="modal-card">
+    <div class="modal-title" style="color:var(--danger);">⚠️ 등록할 수 없습니다</div>
+    <div class="modal-body">{{ block_msg }}</div>
+    <button class="btn-k btn-primary" onclick="document.getElementById('blockModal').remove()">확인</button>
+  </div>
+</div>
+{% endif %}
+
+<div class="card-k">
+  <div class="stack">
+    <div>
+      <h1 class="title">방문차량 등록</h1>
+      <p class="sub">{{ share.household_label }} 세대의 요청으로 열린 화면입니다.</p>
+    </div>
+
+    <div class="infobox">
+      방문세대 <b>{{ share.household_label }}</b><br>
+      방문사유 <b>{{ share.visit_reason }}</b><br>
+      방문기간 <b>{{ share.entry_time.strftime('%m월 %d일') }} ~ {{ share.exit_time.strftime('%m월 %d일') }}</b>
+      <div class="ttlbar" style="margin-top:10px; color:var(--primary-d);">
+        남은 입력시간 <span id="ttl">--:--</span>
+      </div>
+    </div>
+
+    <form method="post" class="stack" id="visitForm">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="field">
+        <label>차량번호</label>
+        <input type="text" name="car_number" id="carInput" value="{{ form.car_number or '' }}"
+               placeholder="12가3456" maxlength="9" autocomplete="off" required autofocus
+               style="text-align:center; font-size:1.7rem; letter-spacing:.06em;">
+        <div id="carHint" style="margin-top:8px; font-size:.9rem; font-weight:600; color:var(--muted); text-align:center;">
+          예) 12가3456 · 123가4567 · 서울12가3456
+        </div>
+      </div>
+
+      <div class="field">
+        <label>연락처</label>
+        <input type="tel" name="visitor_phone" id="phoneInput" value="{{ form.visitor_phone or '' }}"
+               placeholder="010-1234-5678" maxlength="20" autocomplete="off" inputmode="numeric" required
+               style="text-align:center; font-size:1.3rem; letter-spacing:.04em;">
+      </div>
+
+      <button class="btn-k btn-primary btn-lg" id="submitBtn">등록하기</button>
+    </form>
+
+    <p class="sub" style="text-align:center; font-size:.85rem;">
+      입력하신 정보는 방문차량 등록에만 쓰입니다.<br>
+      등록이 끝나면 이 링크는 곧바로 닫힙니다.
+    </p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var left = {{ share.seconds_left }};
+  var ttl = document.getElementById('ttl');
+  function tick(){
+    if(left <= 0){ ttl.textContent = '만료됨'; ttl.style.color='var(--danger)';
+      var b=document.getElementById('submitBtn'); b.disabled=true; b.style.opacity=.4;
+      b.textContent='유효시간이 지났습니다'; return; }
+    var m=Math.floor(left/60), s=left%60;
+    ttl.textContent = m + ':' + String(s).padStart(2,'0');
+    left--; setTimeout(tick, 1000);
+  }
+  tick();
+
+  var CAR_RE=/^(?:[가-힣]{2})?\d{2,3}[가-힣]\d{4}$/;
+  var car=document.getElementById('carInput'), phone=document.getElementById('phoneInput');
+  var hint=document.getElementById('carHint'), btn=document.getElementById('submitBtn');
+  function render(){
+    var v=(car.value||'').replace(/\s/g,'');
+    var ok=CAR_RE.test(v);
+    if(!v){ hint.style.color='var(--muted)'; hint.textContent='예) 12가3456 · 123가4567 · 서울12가3456'; }
+    else if(ok){ hint.style.color='var(--ok)'; hint.textContent='✓ 올바른 차량번호'; }
+    else { hint.style.color='var(--danger)'; hint.textContent='형식 확인: 12가3456 / 123가4567 / 서울12가3456'; }
+    var pOk=(phone.value||'').replace(/\D/g,'').length>=9;
+    var go = ok && pOk && left > 0;
+    btn.disabled=!go; btn.style.opacity=go?1:.5;
+  }
+  car.addEventListener('input',render);
+  phone.addEventListener('input',render);
+  render();
+})();
+</script>
+{% endblock %}

@@ -31,6 +31,18 @@
   </a>
 </div>
 
+<div class="section-title" style="margin-top:22px;"><span>경비실</span></div>
+<div class="stack">
+  <a href="{{ url_for('admin.lookup_qr') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">📱 경비실 QR 발급 <span style="color:var(--muted); font-weight:600; font-size:.88rem;">PIN 포함 · 인쇄용</span></span>
+    <span style="color:var(--muted);">→</span>
+  </a>
+  <a href="{{ url_for('admin.lookups') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
+    <span style="font-weight:700;">🕘 경비실 조회기록 <span style="color:var(--muted); font-weight:600; font-size:.88rem;">근무자 배치표 대조용</span></span>
+    <span style="color:var(--muted);">→</span>
+  </a>
+</div>
+
 <div class="section-title" style="margin-top:22px;"><span>내려받기</span></div>
 <div class="stack">
   <a href="{{ url_for('admin.export_workbook') }}" class="item" style="text-decoration:none; color:var(--ink); align-items:center;">
